@@ -1,0 +1,21 @@
+{
+  "repository": "https://github.com/yashpotdar-py/drowning-detection-system",
+  "revision": "21174a740fe9461af87183e8f96f34ca78f3fcdc",
+  "drowning_yolov8n.pt": {
+    "upstream_path": "models/drowning_detection_yolov8/weights/best.pt",
+    "sha256": "0ad4c8652c0665fca6871b4a9586fddc850159f16beba0b518861427e3f755c3",
+    "labels": ["Active drowning", "Possible Passive Drowner", "Swimming"],
+    "architecture": "YOLOv8n",
+    "training_image_size": 640,
+    "dataset": "https://universe.roboflow.com/ai-drone-lifeguard/ai-drone-lifeguard/dataset/6",
+    "dataset_license": "CC BY 4.0",
+    "code_license": "MIT"
+  },
+  "person_yolov8n.pt": {
+    "upstream_path": "models/yolov8n.pt",
+    "sha256": "31e20dde3def09e2cf938c7be6fe23d9150bbbe503982af13345706515f2ef95",
+    "architecture": "COCO YOLOv8n",
+    "upstream": "https://github.com/ultralytics/ultralytics",
+    "license": "AGPL-3.0"
+  }
+}

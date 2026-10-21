@@ -1,0 +1,14 @@
+{
+  "repository": "https://github.com/fahimhkhan/ripscout",
+  "revision": "9c42c5db12ae914137a022242a19612710a85b11",
+  "files": {
+    "detect1.tflite": "91fd89db1591006158c07ddb4835771cd7a9aa859a71aeb870596fe4121f7f42",
+    "labelmap1.txt": "96f87b394255d54533b92bad3a2d6c70070e48cb4dd47f9970afa840f5f069b6"
+  },
+  "upstream_model": "MobileNetSSDRip: FPVDemo/Model/detect1.tflite",
+  "class_mapping": {
+    "0": "sediment_rip"
+  },
+  "license": "UC Santa Cruz Noncommercial License",
+  "citation": "F. H. Khan et al., RipScout, IEEE JSTARS 18 (2025), 7742-7755. DOI:10.1109/JSTARS.2025.3543695"
+}

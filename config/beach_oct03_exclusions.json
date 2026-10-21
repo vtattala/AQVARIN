@@ -1,0 +1,10 @@
+{
+  "coordinate_space": "normalized",
+  "rules": [{
+    "classes": ["boat"],
+    "polygon": [[0, 0.04], [0.50, 0.04], [0.56, 0.60], [0.56, 0.96], [0, 0.96]],
+    "min_box_overlap": 0.60,
+    "start_frame": 0,
+    "end_frame": 413
+  }]
+}

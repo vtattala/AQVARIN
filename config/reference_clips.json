@@ -1,0 +1,22 @@
+{
+  "c9583f60f9173ad24d96beddc6bfd86ac5ee566d2ef899e4504aac90b6701779": {
+    "allow_boats": false,
+    "water_activity_confirmed": true,
+    "reason": "Reviewed swimmer reference clip; user reports no boats; only this exact source hash",
+    "allowed_classes": [
+      "swimmer"
+    ]
+  },
+  "c05b006ec5f31ae28bfb3020d0f10463c79e4279cdb908b1d0af1d1e9d1d8446": {
+    "allow_boats": false,
+    "water_activity_confirmed": true,
+    "reason": "Reviewed swimmer reference clip; user reports no boats; only this exact source hash",
+    "allowed_classes": [
+      "swimmer"
+    ]
+  },
+  "aee1a461aa36f8e875ce412032cc4f5ce8d9d22f24b79697f15cfd34c7720c9e": {
+    "output_exclusions": "config/beach_oct03_exclusions.json",
+    "reason": "Previously reviewed tree region; original swimmer observations remain unchanged"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "backend": "yolo",
+  "repository": "third_party/drowning-detection",
+  "checkpoint": null,
+  "architecture": "2Dseq_tiny",
+  "device": "cpu",
+  "score_threshold": 0.75,
+  "motion_reference": "uncalibrated",
+  "water_confirmed": false,
+  "offshore_direction": null
+}

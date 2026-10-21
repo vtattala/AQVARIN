@@ -1,0 +1,18 @@
+# Tested Windows/Python 3.12 CPU environment. Live GPU packages are isolated separately.
+--extra-index-url https://download.pytorch.org/whl/cpu
+ultralytics==8.4.166
+torch==2.14.0
+torchvision==0.29.0
+numpy==2.5.3
+opencv-python==5.0.0.93
+pillow==12.3.0
+fastapi==0.142.1
+starlette==1.7.0
+uvicorn==0.54.0
+python-multipart==0.0.32
+pytest==8.4.2
+httpx==0.28.1
+lap==0.5.13
+sahi==0.12.7
+imageio-ffmpeg==0.6.0
+ai-edge-litert==2.3.0
