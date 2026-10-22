@@ -13,7 +13,7 @@ export function ObservationFill({ name }: { name: string }) {
 
 /** Display the supplied emblem directly from the bundled brand board. */
 export function AqvarinMark({ size = 52 }: { size?: number }) {
-  return <Svg width={size} height={size} viewBox="395 75 450 480" accessibilityLabel="AQVARIN water intelligence logo">
+  return <Svg width={size} height={size} viewBox="395 75 450 480" accessibilityLabel="AQVARIN beach intelligence logo">
     <SvgImage href={require('../assets/branding/aqvarin-brand.png')} x={0} y={0} width={1254} height={1254} />
   </Svg>;
 }

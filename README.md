@@ -1,4 +1,4 @@
-# AQVARIN — Water Intelligence
+# AQVARIN — Beach Intelligence
 
 Mobile video and live-camera analysis for maritime object identification,
 swimmer tracking, possible drowning review, and visible sediment-rip candidates.
