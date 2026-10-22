@@ -36,3 +36,19 @@ are copied into the catalogue. Geographic names do not establish public access.
 
 City/ZIP lookup uses Open-Meteo geocoding, based on GeoNames; attribution appears
 in the place picker. API terms and availability still apply.
+
+## Worldwide geographic catalogue
+
+GeoNames (https://www.geonames.org/), licensed under Creative Commons Attribution
+4.0 (https://creativecommons.org/licenses/by/4.0/), supplies the worldwide beach
+names, alternate names, coordinates, countries and regions in
+`mobile/src/discover/data/world-beaches.json` and `countries.json`.
+AQVARIN selects Beach / Beaches feature codes, rounds coordinates, limits aliases,
+deduplicates nearby matching names and combines the results with U.S. records.
+Attribution appears in the app and each record links to its GeoNames source.
+`world-provenance.json` identifies the snapshot and input hashes. These records
+are geographic features, not verified public recreational access points.
+
+Leaflet 1.9.4 (https://leafletjs.com/) is BSD-2-Clause. The map uses OpenStreetMap
+tiles with visible contributor attribution; https://www.openstreetmap.org/copyright.
+OpenStreetMap beach records are not included in this catalogue snapshot.

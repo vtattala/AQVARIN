@@ -54,7 +54,7 @@ test('search combines state, multiword names, favorites and distance without mut
 });
 test('private access is excluded from activity candidates and lake beaches are excluded from surfing',()=>{
  for(const activity of ['swimming','surfing'])assert.ok(searchBeaches({query:'',activity}).every(b=>b.access!=='private'));
- assert.ok(searchBeaches({query:'',activity:'surfing'}).every(b=>!b.waterType||b.waterType==='ocean'));
+ assert.ok(searchBeaches({query:'',activity:'surfing'}).every(b=>b.waterType!=='lake'));
 });
 test('inland records never request unrelated ocean forecasts',async()=>{
  const beach=BEACHES.find(b=>b.waterType==='lake');const original=global.fetch,urls=[];
@@ -72,10 +72,10 @@ test('map uses geographic clustering and safely embeds government beach names',(
  assert.ok(html.includes('label.textContent=title'));
  assert.ok(html.includes('map.project'));
 });
-test('city lookup returns U.S. locations and rejects foreign matches',async()=>{
+test('city lookup includes international places with country labels',async()=>{
  const {findPlaces}=require('../src/discover/places.ts');const original=global.fetch;
  global.fetch=async()=>({ok:true,json:async()=>({results:[{id:1,name:'Miami',admin1:'Florida',country_code:'US',latitude:25.7,longitude:-80.2},{id:2,name:'Paris',country_code:'FR',latitude:48,longitude:2}]})});
- try{const places=await findPlaces('Miami');assert.equal(places.length,1);assert.equal(places[0].label,'Miami, Florida');}finally{global.fetch=original;}
+ try{const places=await findPlaces('Miami');assert.equal(places.length,2);assert.equal(places[0].label,'Miami, Florida, US');assert.equal(places[1].label,'Paris, FR');}finally{global.fetch=original;}
 });
 test('forecast fan-out is bounded to a selected beach plus one page, even nationally',()=>{
  const {forecastTargets}=require('../src/discover/conditions.ts');
@@ -83,4 +83,31 @@ test('forecast fan-out is bounded to a selected beach plus one page, even nation
  assert.equal(batch[0].id,BEACHES[0].id);assert.ok(batch.length<=13);
  assert.equal(new Set(batch.map(b=>b.id)).size,batch.length);
  assert.ok(batch.some(b=>b.id===BEACHES[100].id));
+});
+
+test('worldwide coverage, country filters and non-Latin aliases work',()=>{
+ const {AVAILABLE_COUNTRIES}=require('../src/discover/beaches.ts');
+ assert.ok(BEACHES.length>22000);assert.ok(AVAILABLE_COUNTRIES.length>=170);
+ for(const country of ['AU','BR','ZA','GB','JP','ID','NZ','FJ','FR','GR']){
+  const found=searchBeaches({query:'',activity:'all',country});assert.ok(found.length,country);assert.ok(found.every(b=>b.country===country));
+ }
+ assert.ok(searchBeaches({query:'Bondi',activity:'all',country:'AU'}).some(b=>b.name==='Bondi Beach'));
+ const japanese=BEACHES.find(b=>b.country==='JP'&&(b.aliases??[]).some(n=>/[\u3040-\u30ff\u3400-\u9fff]/.test(n)));
+ assert.ok(japanese);const alias=japanese.aliases.find(n=>/[\u3040-\u30ff\u3400-\u9fff]/.test(n));
+ assert.ok(searchBeaches({query:alias,activity:'all',country:'JP'}).some(b=>b.id===japanese.id));
+});
+test('international alert coverage stays explicitly unsupported and never calls NWS',async()=>{
+ const {fetchAlerts}=require('../src/discover/conditions.ts');const b=BEACHES.find(b=>b.country==='AU');const original=global.fetch,urls=[];
+ global.fetch=async url=>{urls.push(url);return {ok:true,json:async()=>({latitude:b.latitude,longitude:b.longitude,current:{time:now/1000,wave_height:1,wind_speed_10m:10},hourly:{time:[]}})};};
+ try{const c=await fetchConditions(b);assert.ok(c.alertsScope);assert.equal(c.alertsError,undefined);assert.ok(!urls.some(u=>u.includes('weather.gov')));await assert.rejects(()=>fetchAlerts(b),/coverage/);assert.ok(!waterQualitySource(b).url.includes('epa.gov'));}finally{global.fetch=original;}
+});
+test('unclassified inland locations do not borrow distant ocean wave data',async()=>{
+ const b={...BEACHES[0],waterType:'unknown',country:'CH',latitude:47,longitude:8};const original=global.fetch;
+ global.fetch=async()=>({ok:true,json:async()=>({latitude:43,longitude:8,current:{time:now/1000,wave_height:2,temperature_2m:18},hourly:{time:[]}})});
+ try{const c=await fetchConditions(b);assert.equal(c.wave,null);assert.ok(c.marineScope.includes('withheld'));assert.equal(c.air,18);}finally{global.fetch=original;}
+});
+test('date-line neighbors stay geographically near and map wraps around its center',()=>{
+ assert.ok(distanceKm({latitude:-17,longitude:179.9},{latitude:-17,longitude:-179.9})<25);
+ const {mapDocument}=require('../src/discover/mapDocument.ts');const html=mapDocument({beaches:BEACHES.filter(b=>b.country==='FJ'),selected:'',favorites:[],alerts:[]});
+ assert.ok(html.includes('longitudes.forEach'));assert.ok(html.includes('map.getCenter().lng'));
 });

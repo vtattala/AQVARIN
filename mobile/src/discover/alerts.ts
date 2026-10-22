@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BEACHES } from './beaches';
-import { BeachAlert, fetchAlerts } from './conditions';
+import { BeachAlert, fetchAlerts, supportsAlerts } from './conditions';
 import { notify } from './device';
 export const WATCH_KEY='aqvarin.discover.watch.v1';
 const SEEN_KEY='aqvarin.discover.seen.v1';
@@ -18,8 +18,10 @@ async function check() {
   const previous: string[]=JSON.parse(await AsyncStorage.getItem(SEEN_KEY)??'[]');
   const seen=new Set(previous);
   const inbox: Notice[]=JSON.parse(await AsyncStorage.getItem(INBOX_KEY)??'[]');
+  const supported=BEACHES.filter(b=>watch.favorites.includes(b.id)&&supportsAlerts(b));
+  if(!supported.length)throw new Error('Your favorites are saved. Official alert monitoring currently covers U.S. beaches and territories only.');
   let successes=0;
-  for(const beach of BEACHES.filter(b=>watch.favorites.includes(b.id))) {
+  for(const beach of supported) {
     try {
       const alerts=await fetchAlerts(beach);successes++;
       for(const alert of alerts) {

@@ -1,0 +1,19 @@
+{
+  "generatedAt": "2026-10-22T03:29:56.503443+00:00",
+  "records": 16203,
+  "geoNamesRecords": 16203,
+  "countriesAndTerritories": 170,
+  "sources": [
+    {
+      "url": "https://download.geonames.org/export/dump/allCountries.zip",
+      "license": "CC BY 4.0",
+      "selection": "T.BCH and T.BCHS; names, aliases and coordinates; near-identical records deduplicated"
+    }
+  ],
+  "inputs": {
+    "countryInfo.txt": "c55f638cfaafb4fe45a9aa15120a0f1f78e8a34a8e1847d7b9320cf740fbc9ab",
+    "allCountries.zip": "4b8a10021d69736be2f78b75cbd6f49648f50bcd90da117cc1c4f84767725182",
+    "admin1CodesASCII.txt": "b577baa3476bbe94f0454545e517e1835401d79c5b1105c8e02cf1d4a505e8ec"
+  },
+  "notes": "OpenStreetMap extraction timed out and is not included. GeoNames feature names are geographic records, not verified recreational access points."
+}
