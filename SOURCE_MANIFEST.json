@@ -59,7 +59,7 @@
   "mobile/src/api.ts": "2c25f9dbfea6fa7bbc939581d044148416a0461b6c0ff099e2ab1285c1169dfc",
   "mobile/src/discover/BeachMap.tsx": "32deac36ddc19d13ccd4907ba59d91df8b58b0b7ad2ba7c84c91ee707f04947d",
   "mobile/src/discover/BeachMap.web.tsx": "f684dd873394b9585fd3ce81e022eb449de78012df5bda7f4d181acea2d3e321",
-  "mobile/src/discover/DiscoverScreen.tsx": "96a57d705e88d4a31dc6c3de27d2deb21d38c2a9880741018462612d7ac58aba",
+  "mobile/src/discover/DiscoverScreen.tsx": "f855c69f64dbb8c07ed2d1b29b5effc83a69fcc11e2618070fcbb1605a67d9b7",
   "mobile/src/discover/TravelBrief.tsx": "4db60093a89fd723fff69fa2f96d28fb7ca9bbd81efe8369c64e5aa3c5007bd7",
   "mobile/src/discover/alerts.ts": "4646969da9bcc84da8af7e150b3ffbcefe1eb5c615251c95054efd6e1446a813",
   "mobile/src/discover/background.ts": "746898201a5e8643188cc3a0adf792a2b4bbbe87c4bbdff149920df3e5d63568",
