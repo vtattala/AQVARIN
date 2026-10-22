@@ -5,6 +5,7 @@ import Svg, { Polyline } from 'react-native-svg';
 import { BEACHES, BEACH_BY_ID, AVAILABLE_STATES, STATE_NAMES, AVAILABLE_COUNTRIES, COUNTRY_NAMES, Beach, Position, Activity, searchBeaches, waterQualitySource, distanceKm } from './beaches';
 import { Conditions, activityFit, fetchConditions, isStale, rankBeaches, forecastTargets } from './conditions';
 import BeachMap from './BeachMap';
+import TravelBrief from './TravelBrief';
 import { FORECAST_RULES } from './forecastAlerts';
 import { findPlaces, Place } from './places';
 import { locate, enableNotifications } from './device';
@@ -134,7 +135,7 @@ export default function DiscoverScreen({onMonitor,onFocusBeach}:{onMonitor:()=>v
     <View style={s.mapCard}><BeachMap beaches={candidates} overview={!countryCode&&!stateCode&&!query&&!origin&&!onlyFavorites} selected={selected} favorites={favorites} alerts={mapAlerts} origin={origin} onSelect={choose} /><View style={[s.row,{padding:14}]}><Text style={s.small}>● Beach</Text><Text style={s.warning}>● Alert / forecast threshold</Text><Text style={s.small}>★ Favorite · Tap a cluster to zoom · Tap a beach to explore</Text></View></View>
     {!!beaches.length&&<View style={s.detail} onLayout={e=>{detailOffset.current=e.nativeEvent.layout.y;}}>
       <View style={s.rowBetween}><View style={{flex:1,gap:5}}><Text style={s.eyebrow}>YOUR BEACH BRIEF</Text><Text style={s.beachTitle}>{beach.name}</Text><Text style={s.small}>{beach.area}{origin?` · ${distanceKm(origin,beach).toFixed(1)} km away`:''}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={`${favorites.includes(beach.id)?'Unfavorite':'Favorite'} ${beach.name}`} accessibilityState={{selected:favorites.includes(beach.id)}} disabled={!loaded} onPress={()=>toggleFavorite(beach.id)} style={s.star}><Text style={{fontSize:27,color:'#18E0D1'}}>{favorites.includes(beach.id)?'★':'☆'}</Text></Pressable></View>
-      <Text style={s.body}>{beach.description}</Text>{beach.sourceType&&<Text style={s.small}>{beach.sourceType} record {beach.sourceId} · {beach.waterType==='ocean'?'Coastal':beach.waterType==='lake'?'Inland water':'Water type unclassified'} · Access and activity suitability need local verification.</Text>}
+      <TravelBrief key={beach.id} beach={beach}/>{beach.sourceType&&<Text style={s.small}>{beach.sourceType} record {beach.sourceId} · {beach.waterType==='ocean'?'Coastal':beach.waterType==='lake'?'Inland water':'Water type unclassified'} · Access and activity suitability need local verification.</Text>}
       {!current?<View style={s.row}><ActivityIndicator color="#18E0D1"/><Text style={s.small}>Loading conditions…</Text></View>:<>
         <Text style={old?s.warning:s.updated}>{old?'SAVED / OUTDATED CONDITIONS': 'LATEST MODEL FORECAST'} · Retrieved {new Date(current.fetchedAt).toLocaleDateString()} {time(current.fetchedAt)}</Text>
         {current.marineTime&&<Text style={s.small}>Marine valid {new Date(current.marineTime*1000).toLocaleString()}</Text>}
@@ -147,7 +148,7 @@ export default function DiscoverScreen({onMonitor,onFocusBeach}:{onMonitor:()=>v
         <View style={s.notice}><Text style={s.section}>Official weather advisories</Text>{current.alertsScope?<Text style={s.body}>{current.alertsScope}</Text>:current.alertsError?<Text style={s.warning}>Alert feed unavailable. Advisory status is unknown.</Text>:current.alerts.length?current.alerts.map(a=><View key={a.id} style={{gap:8}}><Text style={s.warning}>{a.event} · {a.severity}</Text><Text style={s.body}>{a.headline}</Text><Text style={s.small}>{a.instruction||a.description}</Text><Text style={s.small}>Expires {new Date(a.expires).toLocaleString()}</Text><Source label="Read NWS notice" url={a.url}/></View>):<Text style={s.body}>No active NWS alerts returned at the last check. This does not establish water safety.</Text>}</View>
       </>}
       <View style={s.waterQuality}><Text style={s.section}>Water quality & beach closures</Text><Text style={s.body}>Check the local beach programme before water contact. Water-quality status is not automatically monitored here.</Text><Source label={qualitySource.label} url={qualitySource.url}/></View>
-      <View style={s.row}>{beach.amenities.map(a=><Text style={s.amenity} key={a}>{a}</Text>)}</View><Source label="Beach visitor information" url={beach.source}/>
+      <Source label="Beach visitor information" url={beach.source}/>
       <View style={s.row}><Action label="Open directions ↗" onPress={()=>void Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${beach.latitude},${beach.longitude}`)} /><Action label="Analyze your footage →" selected onPress={onMonitor}/></View>
       <View style={s.row}><Source label="Open-Meteo / DWD marine & weather" url="https://open-meteo.com/"/>{(!beach.country||['US','PR','VI','GU','MP','AS'].includes(beach.country))&&<Source label="National Weather Service" url={`https://forecast.weather.gov/MapClick.php?lat=${beach.latitude}&lon=${beach.longitude}`}/>}</View>
     </View>}

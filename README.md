@@ -27,7 +27,9 @@ filter by country or U.S. state, find a city worldwide, explore nearby beaches,
 compare available swimming/surfing forecasts, and save favorites. Ocean forecasts
 are shown where supported. Forecast alerts cover every saved beach worldwide,
 with official warnings additionally available for U.S. beaches and territories. Water quality and local closures are not automatically monitored.
-Discovery does not need the analysis computer.
+Beach briefs add sourced photos, short overviews, nearby food and sights through
+Wikipedia, Wikimedia Commons and Wikivoyage where available. Discovery does not
+need the analysis computer.
 
 Run `npm ci` inside `mobile`, then `npm run web`. Native apps must be rebuilt for
 the added location/notification modules; the old Pixel APK is unchanged. Background

@@ -52,3 +52,20 @@ are geographic features, not verified public recreational access points.
 Leaflet 1.9.4 (https://leafletjs.com/) is BSD-2-Clause. The map uses OpenStreetMap
 tiles with visible contributor attribution; https://www.openstreetmap.org/copyright.
 OpenStreetMap beach records are not included in this catalogue snapshot.
+
+## Beach photography and traveler information
+
+Selected-beach article excerpts are from Wikipedia contributors; nearby travel
+listing excerpts are from Wikivoyage contributors. Text is attributed, linked
+and presented as excerpts under CC BY-SA 4.0:
+https://creativecommons.org/licenses/by-sa/4.0/ . Source pages provide revision
+histories and contributor credits. The copied text excerpts retain this license;
+this does not relicense the app code.
+
+Beach photographs are remotely displayed from Wikimedia Commons. Each image
+retains its individual source license and author attribution, fetched via
+imageinfo metadata and shown below the photo, with source and license links.
+CC BY / CC BY-SA, CC0 and public-domain images are supported; unknown or
+unsupported license metadata is not displayed. Cropping for the UI is indicated.
+No third-party image files are bundled in this change. Information may be
+incomplete or outdated; restaurant entries are not endorsements or live listings.

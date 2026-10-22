@@ -206,3 +206,46 @@ without requiring the user to enable notifications.
 Additional tests exercise international favorite notification delivery,
 deduplication, unsubscribe, failed sources, forecast freshness and rule values.
 Weather API variables and codes: https://open-meteo.com/en/docs
+
+## Beach photos and traveler briefs
+
+The selected beach loads an online photo, a short overview and nearby travel
+listings through Wikimedia's public MediaWiki APIs. This works for any catalogue
+entry; source coverage is not guaranteed for every beach. No images are generated
+or generic stock beaches substituted.
+
+- Wikipedia: geosearch within 5 km, matching the beach name or an alias against
+  article titles and checking article coordinates. English is tried first;
+  selected countries also try their local-language Wikipedia. At least 80%
+  token agreement is required. Unrelated nearby hotels and aquariums do not
+  become the beach article.
+- Wikimedia Commons: the matched article's lead image, with its original file
+  page, author and reusable license. A named, geotagged Commons search within
+  1 km is the fallback. Supported photos are JPEG/PNG/WebP, with CC BY, CC BY-SA,
+  CC0 or public-domain metadata. Maps, logos and diagrams are excluded by title.
+  Photos are remotely loaded, cropped for display, credited beneath the image,
+  and linked to the source and license. Image relevance is a geographic/name
+  heuristic and can still be imperfect.
+- Wikivoyage: nearby guides within 10 km, using geocoded Eat / See / Do listings
+  within 3 km of the beach. The nearest three food listings and up to three
+  other sights are shown. Descriptions are plain-text excerpts, attributed
+  and linked under CC BY-SA 4.0. They are guide listings, not review rankings,
+  popularity claims or verified live opening hours. Distances are straight-line.
+
+No hardcoded restaurant recommendations are fabricated for uncovered locations.
+If sources have no matching photo or listings, the beach retains its geographic
+summary, shows an explicit unavailable state and offers online photo/dining/map
+links. Source errors and image-load failures are visible and retryable. A
+photo-source failure does not discard the sourced article or travel listings.
+
+Only the selected beach triggers these lookups, with cancellation on selection
+changes. Responses cache on-device for 24 hours (5 minutes for partial errors),
+up to 40 beaches, and refresh when revisited after expiry. A manual refresh
+control also reloads the travel sources on request. Source failures can
+preserve saved content with its original timestamp. This does not download
+22,228 photos or fetch traveler information for every map marker at once.
+Native image loading and browser CORS depend on the external sources remaining
+available. Restroom / picnic / parking amenity badges are removed from the brief.
+
+Primary API references: https://www.mediawiki.org/wiki/API:Geosearch and
+https://www.mediawiki.org/wiki/API:Imageinfo

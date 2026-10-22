@@ -136,3 +136,31 @@ test('any international favorite can notify, deduplicate, unsubscribe, and repor
   store.set(service.WATCH_KEY,JSON.stringify({favorites:[b.id],enabled:true}));global.fetch=async()=>{throw Error('offline');};await assert.rejects(()=>service.checkFavoriteAlerts(),/unknown/);assert.equal(JSON.parse(store.get(service.INBOX_KEY)).length,1);
  }finally{Module._load=originalLoad;global.fetch=originalFetch;delete require.cache[file];}
 });
+test('travel matching requires beach names and coordinates rather than a nearby attraction',()=>{
+ const {matchingArticle}=require('../src/discover/travel.ts'),beach=BEACHES.find(b=>b.id==='shores');
+ const pages=[{title:'Birch Aquarium',coordinates:[{lat:beach.latitude,lon:beach.longitude}]},{title:'La Jolla Shores',coordinates:[{lat:0,lon:0}]},{title:'La Jolla Shores',coordinates:[{lat:32.857,lon:-117.2572}],pageid:3}];
+ assert.equal(matchingArticle(beach,pages).pageid,3);assert.equal(matchingArticle(beach,pages.slice(0,2)),undefined);
+ const japanese={...beach,name:'Sunahama',aliases:['砂浜']};assert.equal(matchingArticle(japanese,[{title:'砂浜',coordinates:[{lat:beach.latitude,lon:beach.longitude}],pageid:4}]).pageid,4);
+});
+test('beach photos require a supported image and a usable Commons license and credit',()=>{
+ const {licensedPhoto}=require('../src/discover/travel.ts');
+ const page={title:'File:La Jolla Shores.jpg',imageinfo:[{mime:'image/jpeg',thumburl:'https://upload.wikimedia.org/wikipedia/commons/beach.jpg',descriptionurl:'https://commons.wikimedia.org/wiki/File:Beach.jpg',extmetadata:{Artist:{value:'<a href="/wiki/User:Photographer">Photographer</a>'},LicenseShortName:{value:'CC BY-SA 4.0'},LicenseUrl:{value:'https://creativecommons.org/licenses/by-sa/4.0/'}}}]};
+ assert.equal(licensedPhoto(page).credit,'Photographer');assert.equal(licensedPhoto({...page,title:'File:La Jolla Shores map.jpg'}),undefined);
+ assert.equal(licensedPhoto({...page,imageinfo:[{...page.imageinfo[0],mime:'image/svg+xml'}]}),undefined);
+ assert.equal(licensedPhoto({...page,imageinfo:[{...page.imageinfo[0],thumburl:'javascript:alert(1)'}]}),undefined);
+ assert.equal(licensedPhoto({...page,imageinfo:[{...page.imageinfo[0],extmetadata:{}}]}),undefined);
+});
+test('travel listings handle nested links, filter distance and omit unlocated food claims',()=>{
+ const {guideListings}=require('../src/discover/travel.ts'),beach=BEACHES.find(b=>b.id==='shores');
+ const text='{{eat | name=Seaside Cafe | lat=32.858 | long=-117.257 | content=Coffee and [[breakfast|brunch]] with {{nowrap|ocean views}}. }} {{eat | name=Far Away | lat=40 | long=0 }} {{eat | name=Missing Coordinates | content=No position }} {{see | name=Nearby pier | lat=32.86 | long=-117.257 | content=Walk along the shore. }}';
+ const found=guideListings(text,beach,'https://en.wikivoyage.org/wiki/Guide');assert.deepEqual(found.map(p=>p.name),['Seaside Cafe','Nearby pier']);assert.ok(found[0].description.includes('brunch'));assert.ok(!found[0].description.includes('{{'));assert.ok(found.every(p=>p.distance<3));
+});
+test('a photo-source outage preserves the sourced beach overview and travel listings',async()=>{
+ const {fetchTravelBrief}=require('../src/discover/travel.ts'),beach=BEACHES.find(b=>b.id==='shores'),original=global.fetch;
+ global.fetch=async url=>{
+  if(url.includes('commons.wikimedia.org'))throw Error('photo source offline');
+  const pages=url.includes('wikivoyage.org')?[{title:'San Diego/La Jolla',revisions:[{slots:{main:{content:'{{eat|name=Seaside Cafe|lat=32.858|long=-117.257|content=Coffee by the coast.}}'}}}]}]:[{title:'La Jolla Shores',extract:'A sandy beach in La Jolla.',pageimage:'Shore.jpg',coordinates:[{lat:32.857,lon:-117.2572}]}];
+  return {ok:true,json:async()=>({query:{pages}})};
+ };
+ try{const brief=await fetchTravelBrief(beach);assert.equal(brief.photo,undefined);assert.equal(brief.description,'A sandy beach in La Jolla.');assert.equal(brief.food[0].name,'Seaside Cafe');assert.ok(brief.errors.length);}finally{global.fetch=original;}
+});
