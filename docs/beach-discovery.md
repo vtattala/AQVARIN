@@ -1,9 +1,11 @@
-# Beach discovery
+# Nationwide beach discovery
 
-The Discover tab adds a San Diego County beach catalogue, interactive map,
-activity comparisons, location-based distance filtering, saved favorites and
-National Weather Service advisory notifications. Discovery runs independently
-of the local Python analysis server. Existing upload/live analysis is unchanged.
+Discover now searches a bundled U.S. catalogue with approximately 7,900 named
+and officially reported beach records. The map clusters locations at lower zoom
+levels. Name/county/state search, a state/territory picker, city/ZIP lookup,
+location-based radius search, 12-result pages, favorites and NWS advisory
+notifications work across the catalogue. Existing upload/live analysis is unchanged.
+Discovery does not need the Python analysis computer.
 
 ## Run and verify
 
@@ -16,74 +18,128 @@ npm run test:discover
 npm run web
 ```
 
-Native applications must be rebuilt (`npm run android` / `npm run ios`) because
-this feature adds Expo Location, Notifications, Background Task, Task Manager,
-and React Native WebView. The existing Pixel APK does not contain these changes.
-Native notification permission and background scheduling still need physical
-Android/iOS testing; successful JavaScript exports do not establish device behavior.
+Native apps need a rebuild (`npm run android` / `npm run ios`) for the location,
+notification and background modules added with Discover. The original Pixel APK
+is unchanged. A JavaScript export does not establish physical-device notification
+permission or background scheduling behavior.
 
-## Data and scope
+## Catalogue and coverage
 
-- Catalogue: 14 San Diego County beaches, with visitor-information source links.
-  The catalogue is curated, not a worldwide beach search service. Amenities are
-  visitor information, not guarantees of opening hours or lifeguard coverage.
-- Map: Leaflet 1.9.4 (BSD-2-Clause) and OpenStreetMap tiles, loaded over HTTPS.
-  OpenStreetMap attribution is visible. Internet is required for map assets.
-  If the map cannot load, the searchable beach list remains usable.
-- Marine/weather: Open-Meteo Marine and Weather APIs (Open-Meteo/DWD attribution
-  shown in beach details). Data is modeled, not a beach sensor measurement.
-  Wave height/period, sea-surface temperature, wind, air temperature, and a
-  24-hour forecast are included. Modeled sea level includes tides relative to
-  mean sea level; it is explicitly not a local tide-gauge reading.
-- Advisories: NWS active alerts at each beach coordinate. Only Actual,
-  non-cancelled, non-expired messages are used. Failed feeds remain unknown.
-- Water quality/closures: link to the County Beach & Bay Water Quality Program,
-  https://www.sdbeachinfo.com/. This version does NOT fetch or notify about
-  county bacterial-water-quality or closure changes. NWS alerts are distinct.
-- Source docs: https://open-meteo.com/en/docs/marine-weather-api and
-  https://www.weather.gov/documentation/services-web-api.
+`mobile/src/discover/data/us-beaches.json` is generated from:
 
-Conditions refresh on startup, foreground resume, manual request, and every
-five minutes while active. The last retrieved data is saved locally. Data more
-than 30 minutes old, or marine model timestamps more than three hours old, is
-marked outdated; incomplete/stale data is demoted in activity comparisons.
-Partial failures preserve other successfully returned fields. A total outage
-preserves cached data and its original timestamp.
+- EPA BEACON's public `WQP_Beaches` Beach Lines layer: active, nonhistorical,
+  nondormant coastal and Great Lakes records, keyed by EPA beach ID. These are
+  geographic records, not a live advisory/closure feed.
+- USGS GNIS Domestic Names: current Beach-class records, excluding historical
+  names and missing coordinates. These add inland waters and additional named
+  beaches. Location names do not verify public access or suitability for swimming.
+- The original 14 curated San Diego entries, retaining their IDs and favorites.
+  Nearby matching EPA/USGS names are deduplicated against them.
 
-Swimming comparisons prefer lower modeled waves/wind; surfing comparisons
-prefer waves near 1.2m, longer periods, and lower wind. This is a transparent
-comparison heuristic, not a surf-quality model or safety assessment. Severe
-alerts demote a beach. Distance breaks ties; the Near me radius filters the
-catalogue before ranking. Skill, local currents, local breaks, water quality,
-and lifeguard decisions are not inferred.
+Coverage includes the Atlantic, Pacific, Gulf, Great Lakes, Alaska, Hawaii, Puerto
+Rico, U.S. Virgin Islands, Guam, Northern Mariana Islands and American Samoa.
+There are records for 50 state/territorial/DC jurisdictions, not every inland
+state. An unnamed access point or a beach absent from the official records will
+not appear. This is nationwide coverage, not a guarantee that every U.S. beach
+or access point has been inventoried. Duplicate-looking records can represent
+separate EPA monitoring segments of the same shoreline.
+
+The catalogue works offline after the app loads. Internet is required for map
+tiles, forecasts, advisories and city/ZIP lookup. Source coordinates are approximate
+feature locations and not access directions. Reported private access is displayed
+and excluded from swimming/surfing comparison candidates. Unknown access is
+labelled unverified; the user must check local permission and posted restrictions.
+
+`data/provenance.json` contains source URLs, retrieval time, record counts and
+SHA-256s of the downloaded inputs. Rebuild the catalogue with:
+
+```sh
+python scripts/build_beach_catalogue.py --cache /absolute/path/to/scratch
+```
+
+Use an empty cache directory to retrieve a new snapshot. The script paginates the
+EPA service, validates coordinates and combines the data reproducibly. Raw
+archives are cached outside the source tree and are not included in the app.
+
+## Conditions and comparisons
+
+- Ocean-associated locations: Open-Meteo marine/weather model forecasts for
+  wave height/period, sea-surface temperature, wind, air temperature and a
+  24-hour marine forecast. Modeled sea level includes tides relative to mean sea
+  level and is explicitly not a local tide-gauge reading.
+- Great Lakes and unclassified/inland locations: weather and NWS advisories.
+  Ocean forecasts are deliberately not requested: selecting a remote sea grid
+  cell would misrepresent inland conditions. Water temperature, waves and tides
+  remain unavailable unless supported by a future appropriate data source.
+- NWS: active alerts at each location. Only Actual, noncancelled, nonexpired
+  messages are shown. A failed feed stays unknown, not an all-clear.
+- Water quality/closures: links to the relevant official beach-programme lookup;
+  the San Diego county link is used only for San Diego records. Other states
+  link to EPA's official beach-programme information. These changes are NOT
+  automatically monitored by this app.
+
+Only the selected beach plus the displayed 12-result page is fetched (maximum
+13 locations), with three workers and cached results. Changing the search changes
+the batch. Never request forecasts for all thousands of records. Refresh runs on
+startup, foreground resume, manually, and every five minutes while active. The
+last 150 retrieved location responses are persisted. Failed sources remain
+unavailable; total outages preserve cached values with their original timestamp.
+Data over 30 minutes old or model times over three hours old is marked outdated.
+
+Swimming comparisons prefer lower modeled waves/wind. Surfing comparisons
+prefer waves near 1.2m, longer periods and lower wind. These are transparent
+heuristics across the displayed coastal shortlist, not an exhaustive national
+ranking or a safety/surf-quality model. Inland/unclassified waters lack a marine
+comparison. Source records do not certify that surfing or swimming is permitted.
+Severe alerts and missing/stale data lower ranking; proximity breaks ties. Near me
+first limits and orders records by distance. No swimmer ability, local rip-current
+strength, lifeguard coverage or actual water quality is inferred.
+
+## Map, place lookup and attribution
+
+Leaflet 1.9.4 and OpenStreetMap provide the interactive map, with visible OSM
+attribution, normal caching and identifiable native requests. Clustering limits
+marker rendering to visible geographic groups. At high zoom, individual beaches
+can be selected. Alaska longitudes spanning the dateline are handled explicitly.
+The searchable list remains available if the map cannot load.
+
+City/ZIP search uses Open-Meteo geocoding / GeoNames and filters results to the
+U.S. and supported territories. Choosing a place searches the local catalogue
+within a radius of that location; it does not invent beach records. Device
+location is requested only on tapping Near me, stays in memory and is not stored.
 
 ## Favorites and alerts
 
-Favorites, subscriptions, deduplication keys, condition cache and a bounded
-50-notice inbox are stored with AsyncStorage on the device. Disabling alerts or
-removing a favorite stops future notifications for that subscription. Existing
-inbox notices remain until expired. Each beach/alert ID/sent-time combination
-is delivered once, including active notices found when first enabling alerts.
+Original favorite IDs remain valid, and national EPA/USGS IDs can be favorited
+and checked by the same foreground/background alert service. Preferences,
+deduplication keys, condition cache and a bounded 50-notice inbox are on-device.
+Removing a favorite or disabling alerts stops its future notifications. Existing
+notices remain until expired. Each beach/alert ID/sent-time combination is
+notified once, including active notices found on first enabling alerts.
 
-- Web: check on opening/resuming and every five minutes while open. Browser
-  notifications are optional; in-app inbox works without notification permission.
-  There is no browser push service and no closed-browser delivery.
-- Native: same foreground checks, plus an OS-scheduled background task requested
-  at a minimum interval of 15 minutes. Scheduling and delivery can be delayed
-  or unavailable, especially after force quitting. This is not guaranteed instant
-  push. The UI reports background availability and permission limitations.
+Web checks on opening/resuming and every five minutes while open. Browser
+notifications are optional; the inbox works without notification permission.
+There is no closed-browser push service. Native also requests a background task
+with a minimum 15-minute interval; actual execution is controlled by the phone
+and can be delayed or unavailable, especially after force quitting. This is not
+guaranteed immediate push delivery.
 
-Location is requested only after tapping Near me, used locally to calculate
-straight-line distance, and not persisted. Denial leaves city/name search usable.
-No account, API key, continuous location tracking, or new hosted backend is required.
+## Sources
+
+- https://www.epa.gov/beaches/national-list-beaches
+- https://beacon.epa.gov/ords/beacon2/r/beacon_apex/beacon2/map-page
+- https://www.usgs.gov/us-board-on-geographic-names/download-gnis-data
+- https://open-meteo.com/en/docs/marine-weather-api
+- https://open-meteo.com/en/docs/geocoding-api
+- https://www.weather.gov/documentation/services-web-api
 
 ## Validation
 
-`npm run test:discover` covers catalogue coordinates/uniqueness, distance,
-expired/test/cancelled alerts, activity ordering, stale/unknown data, partial
-source outages, notification deduplication and unsubscribe handling.
-
-TypeScript and Expo Android/iOS/web bundle exports passed during implementation.
-Browser checks confirmed live source data, city filtering, swimming filtering,
-map rendering and favorite persistence after reload. Device background delivery
-and notification permissions require verification on a rebuilt app.
+Focused tests cover nationwide coordinates and coverage, state/name/favorite and
+radius filtering, coastal activity comparisons, private access, geocoding country
+filtering, inland forecast isolation, regional notice links, bounded forecast
+fan-out, stale/unknown data, failed sources, alert deduplication and unsubscribe
+handling, and safe clustered-map embedding. TypeScript and web/Android/iOS bundle
+exports are checked. Browser verification includes Hawaii search, Miami nearby
+results, state filtering and national clusters. Native background delivery still
+requires physical-device validation on a rebuilt app.

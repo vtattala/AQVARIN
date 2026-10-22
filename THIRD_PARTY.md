@@ -22,3 +22,17 @@ The original maritime checkpoint is not replaced. The additional generic person
 checkpoint is Ultralytics YOLOv8n, under the same Ultralytics license above.
 
 Review the licenses and weight provenance before public distribution of this project.
+
+## Nationwide beach catalogue
+
+`mobile/src/discover/data/us-beaches.json` combines active beach locations from
+EPA's public BEACON `WQP_Beaches` service and nonhistorical Beach-class locations
+from USGS GNIS Domestic Names, with nearby matching names deduplicated. These
+U.S. government geographic records are attributed to EPA / USGS in the app.
+The original 14 curated San Diego entries remain, with their existing IDs.
+`data/provenance.json` records retrieval time, source URLs and input SHA-256s.
+No third-party photographs, live water-quality status, or operating-hours data
+are copied into the catalogue. Geographic names do not establish public access.
+
+City/ZIP lookup uses Open-Meteo geocoding, based on GeoNames; attribution appears
+in the place picker. API terms and availability still apply.

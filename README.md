@@ -21,10 +21,11 @@ is included in this snapshot.
 
 ## Beach discovery
 
-The new **Discover** tab explores 14 San Diego County beaches on an interactive
-map. Search by beach/city, use your location, compare swimming/surfing conditions,
+The new **Discover** tab explores 7,944 U.S. beach records on a clustered interactive
+map, including Alaska, Hawaii, Great Lakes and territories. Search by beach,
+county, state, city or ZIP, use your location, compare swimming/surfing conditions,
 view wave/wind/temperature forecasts, and save favorites. Favorite-beach alerts
-follow official NWS weather advisories; county water-quality notices are linked
+follow official NWS weather advisories; local water-quality programmes are linked
 separately. Discovery does not need the analysis computer.
 
 Run `npm ci` inside `mobile`, then `npm run web`. Native apps must be rebuilt for

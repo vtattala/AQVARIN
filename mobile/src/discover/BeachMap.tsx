@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { WebView } from 'react-native-webview';
-import { mapDocument, MapProps } from './mapDocument';
+import { mapDocument, mapSignature, MapProps } from './mapDocument';
 export default function BeachMap(props: MapProps) {
-  const signature=JSON.stringify({beaches:props.beaches,selected:props.selected,favorites:props.favorites,alerts:props.alerts,origin:props.origin});
+  const signature=mapSignature(props);
   const html=useMemo(()=>mapDocument(props),[signature]);
   return <WebView source={{html,baseUrl:'https://aqvarin.local'}} originWhitelist={['https://*']} applicationNameForUserAgent="AQVARIN/0.2 (+https://github.com/vtattala/AQVARIN)" javaScriptEnabled
     onMessage={event=>{try{const m=JSON.parse(event.nativeEvent.data);if(m.type==='beach'&&props.beaches.some(b=>b.id===m.id))props.onSelect(m.id);}catch{}}}

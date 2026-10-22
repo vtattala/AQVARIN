@@ -4,7 +4,7 @@ export type ForecastHour = { time: number; wave: number | null; period: number |
 export type Conditions = {
   fetchedAt: number; marineTime: number | null; weatherTime: number | null;
   wave: number | null; period: number | null; water: number | null; wind: number | null; air: number | null;
-  hours: ForecastHour[]; alerts: BeachAlert[]; marineError?: string; weatherError?: string; alertsError?: string;
+  marineScope?: string; hours: ForecastHour[]; alerts: BeachAlert[]; marineError?: string; weatherError?: string; alertsError?: string;
 };
 export const validNumber = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value : null;
 export const isStale = (conditions: Conditions, now = Date.now()) => now-conditions.fetchedAt > 30*60*1000;
@@ -27,7 +27,7 @@ export function parseAlerts(payload: any, now = Date.now()): BeachAlert[] {
     if(!p || p.status!=='Actual' || p.messageType==='Cancel' || !Number.isFinite(Date.parse(p.expires)) || Date.parse(p.expires)<=now) return [];
     const id=String(p.id??feature.id??'');
     if(!id) return [];
-    return [{id,event:String(p.event??'Weather alert'),headline:String(p.headline??p.event??'Weather alert'),description:String(p.description??''),instruction:String(p.instruction??''),severity:String(p.severity??'Unknown'),sent:String(p.sent??''),expires:p.expires,url:`https://forecast.weather.gov/showsigwx.php?warnzone=${encodeURIComponent((p.geocode?.UGC??[])[0]??'CAZ043')}`}];
+    return [{id,event:String(p.event??'Weather alert'),headline:String(p.headline??p.event??'Weather alert'),description:String(p.description??''),instruction:String(p.instruction??''),severity:String(p.severity??'Unknown'),sent:String(p.sent??''),expires:p.expires,url:`https://forecast.weather.gov/showsigwx.php?warnzone=${encodeURIComponent((p.geocode?.UGC??[])[0]??'')}`}];
   });
 }
 export async function fetchAlerts(beach: Position, signal?: AbortSignal): Promise<BeachAlert[]> {
@@ -35,8 +35,9 @@ export async function fetchAlerts(beach: Position, signal?: AbortSignal): Promis
 }
 export async function fetchConditions(beach: Beach, signal?: AbortSignal): Promise<Conditions> {
   const coords=`latitude=${beach.latitude}&longitude=${beach.longitude}`;
+  const marineSupported=!beach.waterType||beach.waterType==='ocean';
   const [marine,weather,alerts] = await Promise.allSettled([
-    json(`https://marine-api.open-meteo.com/v1/marine?${coords}&current=wave_height,wave_period,sea_surface_temperature&hourly=wave_height,wave_period,sea_level_height_msl&forecast_days=2&timeformat=unixtime&cell_selection=sea`,signal),
+    marineSupported?json(`https://marine-api.open-meteo.com/v1/marine?${coords}&current=wave_height,wave_period,sea_surface_temperature&hourly=wave_height,wave_period,sea_level_height_msl&forecast_days=2&timeformat=unixtime&cell_selection=sea`,signal):Promise.resolve(null),
     json(`https://api.open-meteo.com/v1/forecast?${coords}&current=temperature_2m,wind_speed_10m&timeformat=unixtime`,signal),
     fetchAlerts(beach,signal),
   ]);
@@ -47,11 +48,13 @@ export async function fetchConditions(beach: Beach, signal?: AbortSignal): Promi
     wave:validNumber(m?.current?.wave_height),period:validNumber(m?.current?.wave_period),water:validNumber(m?.current?.sea_surface_temperature),
     wind:validNumber(w?.current?.wind_speed_10m),air:validNumber(w?.current?.temperature_2m),
     hours:(Array.isArray(m?.hourly?.time)?m.hourly.time:[]).map((time: number,i: number)=>({time,wave:validNumber(m.hourly.wave_height?.[i]),period:validNumber(m.hourly.wave_period?.[i]),seaLevel:validNumber(m.hourly.sea_level_height_msl?.[i])})).filter((h: ForecastHour)=>h.time*1000>=now-3600000).slice(0,24),
-    alerts:alerts.status==='fulfilled'?alerts.value:[],marineError:!m?.current?'Marine forecast unavailable':error(marine),weatherError:!w?.current?'Weather unavailable':error(weather),alertsError:error(alerts)};
+    alerts:alerts.status==='fulfilled'?alerts.value:[],marineScope:marineSupported?undefined:'Ocean wave, tide and water-temperature forecasts are not provided for inland or unclassified waters.',marineError:marineSupported&&!m?.current?'Marine forecast unavailable':undefined,weatherError:!w?.current?'Weather unavailable':error(weather),alertsError:error(alerts)};
 }
 export function activityFit(beach: Beach, activity: Activity, c?: Conditions): {score: number; reason: string} {
+  if(beach.access==='private')return {score:-10000,reason:'Private access reported · verify permission'};
   if(activity==='all') return {score:0,reason:beach.activities.filter(a=>a!=='all').join(' · ')};
   if(!beach.activities.includes(activity)) return {score:-10000,reason:'Not listed for this activity'};
+  if(beach.waterType&&beach.waterType!=='ocean')return {score:-500,reason:'Inland / unclassified water · local suitability unverified'};
   if(!c || isStale(c) || c.wave===null || c.wind===null || c.alertsError || !c.marineTime || Date.now()-c.marineTime*1000>3*3600000 || !c.weatherTime || Date.now()-c.weatherTime*1000>3*3600000) return {score:-500,reason:'Conditions incomplete · check details'};
   if(c.alerts.some(a=>['Severe','Extreme'].includes(a.severity))) return {score:-1000,reason:'Official warning active · review before visiting'};
   const penalty=c.alerts.length?100:0;
@@ -64,4 +67,9 @@ export function rankBeaches(beaches: Beach[], activity: Activity, conditions: Re
     const fit=activityFit(b,activity,conditions[b.id]).score-activityFit(a,activity,conditions[a.id]).score;
     return fit || (origin?distanceKm(origin,a)-distanceKm(origin,b):0);
   });
+}
+
+/** Selected location plus one results page: nationwide browsing never fans out over the catalogue. */
+export function forecastTargets(selected: Beach, candidates: Beach[], offset=0): Beach[] {
+  return [...new Map([selected,...candidates.slice(offset,offset+12)].map(beach=>[beach.id,beach])).values()];
 }

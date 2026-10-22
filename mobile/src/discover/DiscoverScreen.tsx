@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Linking, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Polyline } from 'react-native-svg';
-import { BEACHES, Beach, Position, Activity, COUNTY_URL, distanceKm } from './beaches';
-import { Conditions, activityFit, fetchConditions, isStale, rankBeaches } from './conditions';
+import { BEACHES, BEACH_BY_ID, AVAILABLE_STATES, STATE_NAMES, Beach, Position, Activity, searchBeaches, waterQualitySource, distanceKm } from './beaches';
+import { Conditions, activityFit, fetchConditions, isStale, rankBeaches, forecastTargets } from './conditions';
 import BeachMap from './BeachMap';
+import { findPlaces, Place } from './places';
 import { locate, enableNotifications } from './device';
 import { checkFavoriteAlerts, INBOX_KEY, Notice, WATCH_KEY } from './alerts';
 import { registerAlertChecks } from './background';
@@ -19,33 +20,41 @@ function Metric({label,amount}:{label:string;amount:string}) {return <View style
 function Source({label,url}:{label:string;url:string}) {return <Pressable accessibilityRole="link" onPress={()=>void Linking.openURL(url)}><Text style={s.link}>{label} ↗</Text></Pressable>;}
 export default function DiscoverScreen({onMonitor,onFocusBeach}:{onMonitor:()=>void;onFocusBeach:(offset:number)=>void}) {
   const [query,setQuery]=useState(''),[activity,setActivity]=useState<Activity>('all');
+  const [stateCode,setStateCode]=useState(''),[showStates,setShowStates]=useState(false),[pageOffset,setPageOffset]=useState(0);
+  const [places,setPlaces]=useState<Place[]>([]),[findingPlace,setFindingPlace]=useState(false),[originLabel,setOriginLabel]=useState('Your location');
   const [origin,setOrigin]=useState<Position>(),[radius,setRadius]=useState(50),[locating,setLocating]=useState(false);
   const [favorites,setFavorites]=useState<string[]>([]),[onlyFavorites,setOnlyFavorites]=useState(false),[alertsEnabled,setAlertsEnabled]=useState(false);
   const [selected,setSelected]=useState('shores'),[conditions,setConditions]=useState<Record<string,Conditions>>({});
   const [loading,setLoading]=useState(false),[loaded,setLoaded]=useState(false),[error,setError]=useState(''),[alertStatus,setAlertStatus]=useState('');
   const [inbox,setInbox]=useState<Notice[]>([]),[showInbox,setShowInbox]=useState(false),[checkingAlerts,setCheckingAlerts]=useState(false);
   const [forecastIndex,setForecastIndex]=useState(0);
-  const detailOffset=useRef(0);
+  const detailOffset=useRef(0),placeRequest=useRef(0);
+  function updateQuery(value:string){placeRequest.current++;setFindingPlace(false);setQuery(value);setPlaces([]);}
   const refreshing=useRef(false),saveQueue=useRef(Promise.resolve()),controller=useRef<AbortController|null>(null);
   const conditionsRef=useRef(conditions);conditionsRef.current=conditions;
-  const refresh=useCallback(async()=>{
+  const targets=useRef<Beach[]>([]);
+  const refresh=useCallback(async(force=false)=>{
     if(refreshing.current)return;
     refreshing.current=true;setLoading(true);
     const c=new AbortController();controller.current=c;
     const next={...conditionsRef.current};let index=0;
+    const batch=[...targets.current];const batchKey=batch.map(b=>b.id).join(',');
     try {
       await Promise.all(Array.from({length:3},async()=>{
-        while(index<BEACHES.length&&!c.signal.aborted) {
-          const beach=BEACHES[index++];const result=await fetchConditions(beach,c.signal);
+        while(index<batch.length&&!c.signal.aborted) {
+          const beach=batch[index++];
+          if(!force&&next[beach.id]&&Date.now()-next[beach.id].fetchedAt<5*60000)continue;
+          const result=await fetchConditions(beach,c.signal);
           if(c.signal.aborted)return;
+          if(batchKey!==targets.current.map(b=>b.id).join(','))return;
           // Preserve the last complete response on a total outage, with its original timestamp.
-          if(result.marineError&&result.weatherError&&result.alertsError&&next[beach.id])continue;
+          if((result.marineError||result.marineScope)&&result.weatherError&&result.alertsError&&next[beach.id])continue;
           next[beach.id]=result;setConditions({...next});
         }
       }));
-      if(!c.signal.aborted)await AsyncStorage.setItem(CACHE_KEY,JSON.stringify(next));
+      if(!c.signal.aborted){const bounded=Object.fromEntries(Object.entries(next).sort((a,b)=>b[1].fetchedAt-a[1].fetchedAt).slice(0,150));await AsyncStorage.setItem(CACHE_KEY,JSON.stringify(bounded));}
     } catch {if(!c.signal.aborted)setError('Could not save refreshed conditions. Your last saved data is still available.');}
-    finally {refreshing.current=false;if(!c.signal.aborted)setLoading(false);}
+    finally {refreshing.current=false;if(!c.signal.aborted){setLoading(false);if(batchKey!==targets.current.map(b=>b.id).join(','))void refresh();}}
   },[]);
   useEffect(()=>{
     let mounted=true;
@@ -76,19 +85,33 @@ export default function DiscoverScreen({onMonitor,onFocusBeach}:{onMonitor:()=>v
     const listener=AppState.addEventListener('change',state=>{if(state==='active'){void refresh();if(alertsEnabled)void checkAlerts();}});
     return()=>{clearInterval(timer);listener.remove();};
   },[loaded,alertsEnabled,favorites,refresh,checkAlerts]);
-  const beaches=useMemo(()=>rankBeaches(BEACHES.filter(b=>
-    `${b.name} ${b.area}`.toLowerCase().includes(query.trim().toLowerCase())&&
-    (activity==='all'||b.activities.includes(activity))&&(!onlyFavorites||favorites.includes(b.id))&&(!origin||distanceKm(origin,b)<=radius)),activity,conditions,origin),[query,activity,onlyFavorites,favorites,origin,radius,conditions]);
-  useEffect(()=>{if(beaches.length&&!beaches.some(b=>b.id===selected)){setSelected(beaches[0].id);setForecastIndex(0);}},[beaches,selected]);
-  const beach=BEACHES.find(b=>b.id===selected)!;
-  const current=conditions[beach.id];const old=!!current&&(isStale(current)||!current.marineTime||Date.now()-current.marineTime*1000>3*3600000);
-  const mapAlerts=useMemo(()=>BEACHES.filter(b=>conditions[b.id]?.alerts.length).map(b=>b.id),[conditions]);
-  const choose=useCallback((id: string)=>{setSelected(id);setForecastIndex(0);onFocusBeach(detailOffset.current);},[onFocusBeach]);
+  const candidates=useMemo(()=>searchBeaches({query,activity,state:stateCode,origin,radius,favorites:onlyFavorites?favorites:undefined}),[query,activity,stateCode,onlyFavorites,favorites,origin,radius]);
+  useEffect(()=>{setPageOffset(0);},[query,activity,stateCode,onlyFavorites,origin,radius]);
+  // Compare and request only a bounded shortlist. Never fetch forecasts for the whole catalogue.
+  const shortlist=candidates.slice(pageOffset,pageOffset+12);
+  const beaches=useMemo(()=>rankBeaches(shortlist,activity,conditions,origin),[candidates,pageOffset,activity,conditions,origin]);
+  useEffect(()=>{if(candidates.length&&!candidates.some(b=>b.id===selected)){setSelected(candidates[0].id);setForecastIndex(0);}},[candidates,selected]);
+  const beach=BEACH_BY_ID.get(selected)??BEACHES[0];
+  const conditionTargets=forecastTargets(beach,candidates,pageOffset);
+  targets.current=conditionTargets;
+  const targetKey=conditionTargets.map(b=>b.id).join(',');
+  useEffect(()=>{if(!loaded)return;const timer=setTimeout(()=>void refresh(),450);return()=>clearTimeout(timer);},[loaded,targetKey,refresh]);
+  const qualitySource=waterQualitySource(beach);
+  const current=conditions[beach.id];const old=!!current&&(isStale(current)||(beach.waterType==='ocean'&&(!current.marineTime||Date.now()-current.marineTime*1000>3*3600000))||(!current.weatherTime||Date.now()-current.weatherTime*1000>3*3600000));
+  const mapAlerts=useMemo(()=>Object.keys(conditions).filter(id=>conditions[id].alerts.length>0),[conditions]);
+  const choose=useCallback((id: string)=>{const chosen=BEACH_BY_ID.get(id);if(!chosen)return;
+    if(!candidates.some(b=>b.id===id)){updateQuery('');setStateCode(chosen.state??'');setOnlyFavorites(false);setActivity('all');setOrigin(undefined);}
+    setSelected(id);setForecastIndex(0);onFocusBeach(detailOffset.current);},[onFocusBeach,candidates]);
   function toggleFavorite(id: string) {setFavorites(items=>items.includes(id)?items.filter(x=>x!==id):[...items,id]);}
   async function useLocation() {
     setLocating(true);setError('');
-    try {const p=await locate();setOrigin({latitude:p.latitude,longitude:p.longitude});}
+    try {const p=await locate();setOrigin({latitude:p.latitude,longitude:p.longitude});setOriginLabel('Your location');updateQuery('');setStateCode('');}
     catch(e){setError(e instanceof Error?e.message:'Location unavailable');}finally{setLocating(false);}
+  }
+  async function searchArea() {
+    const request=++placeRequest.current;setFindingPlace(true);setError('');
+    try{const found=await findPlaces(query);if(request!==placeRequest.current)return;setPlaces(found);if(!found.length)setError('No U.S. places found. Try a city name or use the state filter.');}
+    catch(e){if(request===placeRequest.current)setError(e instanceof Error?e.message:'Place search unavailable');}finally{if(request===placeRequest.current)setFindingPlace(false);}
   }
   async function toggleAlerts() {
     if(alertsEnabled){setAlertsEnabled(false);return;}
@@ -97,39 +120,44 @@ export default function DiscoverScreen({onMonitor,onFocusBeach}:{onMonitor:()=>v
   }
   const activeInbox=inbox.filter(n=>Date.parse(n.alert.expires)>Date.now());
   return <>
-    <View style={s.hero}><View style={s.row}><Text style={s.eyebrow}>DISCOVER YOUR COAST</Text><Text style={s.region}>SAN DIEGO COUNTY</Text></View><Text style={s.title}>Your next{ '\n' }ocean day.</Text><Text style={s.subtitle}>Explore the shoreline. Follow the conditions. Keep your favorite beaches close.</Text><View style={s.row}><Text style={s.heroStat}>{BEACHES.length} beaches</Text><Text style={s.small}>Marine forecasts · Official weather alerts</Text></View></View>
-    <View style={s.search}><Icon name="search" color="#18E0D1" /><TextInput accessibilityLabel="Search beaches or cities" placeholder="Search a beach or coastal city" placeholderTextColor="#839ca9" value={query} onChangeText={setQuery} style={s.input} /><Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={()=>setQuery('')}><Text style={s.link}>Clear</Text></Pressable></View>
+    <View style={s.hero}><View style={s.row}><Text style={s.eyebrow}>DISCOVER YOUR BEACH</Text><Text style={s.region}>ACROSS THE UNITED STATES</Text></View><Text style={s.title}>Your next{ '\n' }beach day.</Text><Text style={s.subtitle}>Explore the shoreline. Follow the conditions. Keep your favorite beaches close.</Text><View style={s.row}><Text style={s.heroStat}>{BEACHES.length.toLocaleString()} beach records</Text><Text style={s.small}>Marine forecasts · Official weather alerts</Text></View></View>
+    <View style={s.search}><Icon name="search" color="#18E0D1" /><TextInput accessibilityLabel="Search beaches, counties or states" placeholder="Beach, county, state, or city" placeholderTextColor="#839ca9" value={query} onChangeText={value=>{updateQuery(value);setPlaces([]);}} onSubmitEditing={()=>void searchArea()} style={s.input} /><Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={()=>{updateQuery('');setPlaces([]);}}><Text style={s.link}>Clear</Text></Pressable></View>
+    <View style={s.row}><Action label={stateCode?`${STATE_NAMES[stateCode]} ▾`:'All states & territories ▾'} onPress={()=>setShowStates(true)} /><Action label={findingPlace?'Finding places…':'Find city / ZIP'} disabled={findingPlace||query.trim().length<2} onPress={()=>void searchArea()} /></View>
+    {!!places.length&&<View style={s.card}><Text style={s.section}>Choose a search area</Text><Text style={s.small}>Place search: Open-Meteo / GeoNames</Text>{places.map(place=><Action key={place.id} label={place.label} onPress={()=>{setOrigin(place);setOriginLabel(place.label);updateQuery('');setStateCode('');setPlaces([]);}}/>)}</View>}
+    <Modal visible={showStates} transparent animationType="slide" onRequestClose={()=>setShowStates(false)}><View style={{flex:1,backgroundColor:'#0009',justifyContent:'center',padding:24}}><View style={[s.card,{maxHeight:'80%'}]}><Text style={s.section}>Choose a state or territory</Text><Action label="All states & territories" onPress={()=>{setStateCode('');setOrigin(undefined);setShowStates(false);}}/><ScrollView contentContainerStyle={{gap:10}}>{AVAILABLE_STATES.map(code=><Action key={code} label={`${STATE_NAMES[code]} (${BEACHES.filter(b=>b.state===code).length})`} selected={code===stateCode} onPress={()=>{setStateCode(code);updateQuery('');setOrigin(undefined);setShowStates(false);}}/>)}</ScrollView><Action label="Close" onPress={()=>setShowStates(false)}/></View></View></Modal>
     <View style={s.row}><Action label="Explore all" selected={activity==='all'} onPress={()=>setActivity('all')} /><Action label="Swimming" selected={activity==='swimming'} onPress={()=>setActivity('swimming')} /><Action label="Surfing" selected={activity==='surfing'} onPress={()=>setActivity('surfing')} /><Action label={`★ Favorites (${favorites.length})`} selected={onlyFavorites} onPress={()=>setOnlyFavorites(!onlyFavorites)} /></View>
-    <View style={s.row}><Action label={locating?'Finding you…':origin?'Update location':'◎ Near me'} disabled={locating} onPress={()=>void useLocation()} />{origin&&<><Action label={`Within ${radius} km`} onPress={()=>setRadius(radius===50?100:radius===100?200:50)} /><Action label="All county beaches" onPress={()=>setOrigin(undefined)} /></>}<Action label={loading?'Refreshing…':'↻ Refresh'} disabled={loading} onPress={()=>void refresh()} /></View>
+    <View style={s.row}><Action label={locating?'Finding you…':origin?'Update location':'◎ Near me'} disabled={locating} onPress={()=>void useLocation()} />{origin&&<><Text style={s.small}>{originLabel}</Text><Action label={`Within ${radius} km`} onPress={()=>setRadius(radius===50?100:radius===100?200:50)} /><Action label="Clear distance filter" onPress={()=>setOrigin(undefined)} /></>}<Action label={loading?'Refreshing…':'↻ Refresh'} disabled={loading} onPress={()=>void refresh(true)} /></View>
     {!!error&&<Text accessibilityRole="alert" style={s.warning}>{error}</Text>}
-    <View style={s.mapCard}><BeachMap beaches={beaches} selected={selected} favorites={favorites} alerts={mapAlerts} origin={origin} onSelect={choose} /><View style={[s.row,{padding:14}]}><Text style={s.small}>● Beach</Text><Text style={s.warning}>● Official alert</Text><Text style={s.small}>★ Favorite · Tap a marker to explore</Text></View></View>
+    <View style={s.mapCard}><BeachMap beaches={candidates} overview={!stateCode&&!query&&!origin&&!onlyFavorites} selected={selected} favorites={favorites} alerts={mapAlerts} origin={origin} onSelect={choose} /><View style={[s.row,{padding:14}]}><Text style={s.small}>● Beach</Text><Text style={s.warning}>● Official alert</Text><Text style={s.small}>★ Favorite · Tap a cluster to zoom · Tap a beach to explore</Text></View></View>
     {!!beaches.length&&<View style={s.detail} onLayout={e=>{detailOffset.current=e.nativeEvent.layout.y;}}>
       <View style={s.rowBetween}><View style={{flex:1,gap:5}}><Text style={s.eyebrow}>YOUR BEACH BRIEF</Text><Text style={s.beachTitle}>{beach.name}</Text><Text style={s.small}>{beach.area}{origin?` · ${distanceKm(origin,beach).toFixed(1)} km away`:''}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={`${favorites.includes(beach.id)?'Unfavorite':'Favorite'} ${beach.name}`} accessibilityState={{selected:favorites.includes(beach.id)}} disabled={!loaded} onPress={()=>toggleFavorite(beach.id)} style={s.star}><Text style={{fontSize:27,color:'#18E0D1'}}>{favorites.includes(beach.id)?'★':'☆'}</Text></Pressable></View>
-      <Text style={s.body}>{beach.description}</Text>
+      <Text style={s.body}>{beach.description}</Text>{beach.sourceType&&<Text style={s.small}>{beach.sourceType} record {beach.sourceId} · {beach.waterType==='ocean'?'Coastal':beach.waterType==='lake'?'Great Lakes':'Water type unclassified'} · Access and activity suitability need local verification.</Text>}
       {!current?<View style={s.row}><ActivityIndicator color="#18E0D1"/><Text style={s.small}>Loading conditions…</Text></View>:<>
         <Text style={old?s.warning:s.updated}>{old?'SAVED / OUTDATED CONDITIONS': 'LATEST MODEL FORECAST'} · Retrieved {new Date(current.fetchedAt).toLocaleDateString()} {time(current.fetchedAt)}</Text>
         {current.marineTime&&<Text style={s.small}>Marine valid {new Date(current.marineTime*1000).toLocaleString()}</Text>}
         <View style={s.metrics}><Metric label="Wave height" amount={value(current.wave,' m')} /><Metric label="Wave period" amount={value(current.period,' s')} /><Metric label="Water temp" amount={value(current.water,'°C')} /><Metric label="Wind" amount={value(current.wind,' km/h')} /></View>
         <Text style={s.small}>Air {value(current.air,'°C')}{current.weatherTime?` · Weather valid ${time(current.weatherTime*1000)}`:''}. Regional model estimates; local surf and shore conditions can differ.</Text>
+        {!!current.marineScope&&<Text style={s.small}>{current.marineScope}</Text>}
         {(current.marineError||current.weatherError)&&<Text style={s.warning}>{[current.marineError,current.weatherError].filter(Boolean).join(' · ')}</Text>}
         {!!current.hours.length&&<><View style={s.rowBetween}><Text style={s.section}>Next 24 hours</Text><Text style={s.small}>Wave height</Text></View><WaveChart hours={current.hours} /><View style={s.row}>{current.hours.filter((_,i)=>i%3===0).map(h=><Action key={h.time} label={time(h.time*1000)} selected={current.hours[forecastIndex]?.time===h.time} onPress={()=>setForecastIndex(current.hours.indexOf(h))} />)}</View><Text style={s.body}>{time(current.hours[forecastIndex]?.time*1000)} · Waves {value(current.hours[forecastIndex]?.wave,' m')} · Period {value(current.hours[forecastIndex]?.period,' s')}</Text><Text style={s.small}>Modeled sea level including tides: {value(current.hours[forecastIndex]?.seaLevel,' m')} relative to mean sea level. Not a local tide-gauge reading.</Text></>}
         <View style={s.notice}><Text style={s.section}>Official weather advisories</Text>{current.alertsError?<Text style={s.warning}>Alert feed unavailable. Advisory status is unknown.</Text>:current.alerts.length?current.alerts.map(a=><View key={a.id} style={{gap:8}}><Text style={s.warning}>{a.event} · {a.severity}</Text><Text style={s.body}>{a.headline}</Text><Text style={s.small}>{a.instruction||a.description}</Text><Text style={s.small}>Expires {new Date(a.expires).toLocaleString()}</Text><Source label="Read NWS notice" url={a.url}/></View>):<Text style={s.body}>No active NWS alerts returned at the last check. This does not establish water safety.</Text>}</View>
       </>}
-      <View style={s.waterQuality}><Text style={s.section}>Water quality & beach closures</Text><Text style={s.body}>Check the county’s official notice before water contact. Water-quality status is not automatically monitored here.</Text><Source label="San Diego County Beach & Bay notices" url={COUNTY_URL}/></View>
+      <View style={s.waterQuality}><Text style={s.section}>Water quality & beach closures</Text><Text style={s.body}>Check the local beach programme before water contact. Water-quality status is not automatically monitored here.</Text><Source label={qualitySource.label} url={qualitySource.url}/></View>
       <View style={s.row}>{beach.amenities.map(a=><Text style={s.amenity} key={a}>{a}</Text>)}</View><Source label="Beach visitor information" url={beach.source}/>
       <View style={s.row}><Action label="Open directions ↗" onPress={()=>void Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${beach.latitude},${beach.longitude}`)} /><Action label="Analyze your footage →" selected onPress={onMonitor}/></View>
       <View style={s.row}><Source label="Open-Meteo / DWD marine & weather" url="https://open-meteo.com/"/><Source label="National Weather Service" url={`https://forecast.weather.gov/MapClick.php?lat=${beach.latitude}&lon=${beach.longitude}`}/></View>
     </View>}
-    <View style={s.card}><View style={s.rowBetween}><View style={{flex:1,gap:5}}><Text style={s.section}>Your coast, on your radar.</Text><Text style={s.small}>Official weather advisories for favorite beaches.</Text></View><Icon name="bell" color="#18E0D1" size={25}/></View><View style={s.row}><Action label={alertsEnabled?'Alerts on · Pause':'Enable beach alerts'} selected={alertsEnabled} disabled={!loaded} onPress={()=>void toggleAlerts()}/><Action label={`Inbox (${activeInbox.length})`} selected={showInbox} onPress={()=>setShowInbox(!showInbox)}/>{alertsEnabled&&<Action label={checkingAlerts?'Checking…':'Check now'} disabled={checkingAlerts} onPress={()=>void checkAlerts()}/>}</View><Text style={s.small}>{alertStatus||'Favorite a beach, then enable alerts to follow new weather advisories.'}</Text>{alertsEnabled&&!favorites.length&&<Text style={s.warning}>Add a favorite beach to start following its alerts.</Text>}<Text style={s.small}>{Platform.OS==='web'?'Checks run while this app is open.':'Checks run when the app opens and periodically in the background when the phone allows it.'} Alerts may be delayed. County water-quality changes are not included.</Text>{showInbox&&(activeInbox.length?activeInbox.map(n=><Pressable key={n.key} accessibilityRole="button" onPress={()=>choose(n.beachId)} style={s.inbox}><Text style={s.warning}>{n.beachName} · {n.alert.event}</Text><Text style={s.body}>{n.alert.headline}</Text><Text style={s.small}>Received {new Date(n.receivedAt).toLocaleString()} · Tap to view beach</Text></Pressable>):<Text style={s.body}>No current alerts in your inbox. Expired notices are hidden.</Text>)}</View>
-    <View style={s.rowBetween}><Text style={s.section}>{activity==='all'?'Explore the coastline':activity==='swimming'?'Find your swimming spot':'Find your surf spot'}</Text><Text style={s.small}>{beaches.length} beaches{loading?' · Updating…':''}</Text></View>
-    {activity!=='all'&&<Text style={s.small}>{activity==='swimming'?'Ranked by lower modeled waves and wind, then distance.':'Ranked toward moderate modeled waves, longer periods and lower wind, then distance.'} Official alerts lower ranking. These comparisons do not assess swimming safety or your skill level.</Text>}
-    {!beaches.length&&<View style={s.card}><Text style={s.section}>No beaches match yet.</Text><Text style={s.body}>{onlyFavorites?'Try saving a beach or turning off Favorites.':'Try a different name, activity, or a wider distance.'} This release covers San Diego County.</Text><Action label="Reset filters" onPress={()=>{setQuery('');setOnlyFavorites(false);setActivity('all');setOrigin(undefined);}}/></View>}
+    <View style={s.card}><View style={s.rowBetween}><View style={{flex:1,gap:5}}><Text style={s.section}>Your coast, on your radar.</Text><Text style={s.small}>Official weather advisories for favorite beaches.</Text></View><Icon name="bell" color="#18E0D1" size={25}/></View><View style={s.row}><Action label={alertsEnabled?'Alerts on · Pause':'Enable beach alerts'} selected={alertsEnabled} disabled={!loaded} onPress={()=>void toggleAlerts()}/><Action label={`Inbox (${activeInbox.length})`} selected={showInbox} onPress={()=>setShowInbox(!showInbox)}/>{alertsEnabled&&<Action label={checkingAlerts?'Checking…':'Check now'} disabled={checkingAlerts} onPress={()=>void checkAlerts()}/>}</View><Text style={s.small}>{alertStatus||'Favorite a beach, then enable alerts to follow new weather advisories.'}</Text>{alertsEnabled&&!favorites.length&&<Text style={s.warning}>Add a favorite beach to start following its alerts.</Text>}<Text style={s.small}>{Platform.OS==='web'?'Checks run while this app is open.':'Checks run when the app opens and periodically in the background when the phone allows it.'} Alerts may be delayed. Local water-quality and closure changes are not included.</Text>{showInbox&&(activeInbox.length?activeInbox.map(n=><Pressable key={n.key} accessibilityRole="button" onPress={()=>choose(n.beachId)} style={s.inbox}><Text style={s.warning}>{n.beachName} · {n.alert.event}</Text><Text style={s.body}>{n.alert.headline}</Text><Text style={s.small}>Received {new Date(n.receivedAt).toLocaleString()} · Tap to view beach</Text></Pressable>):<Text style={s.body}>No current alerts in your inbox. Expired notices are hidden.</Text>)}</View>
+    <View style={s.rowBetween}><Text style={s.section}>{activity==='all'?'Explore U.S. beaches':activity==='swimming'?'Find your swimming spot':'Find your surf spot'}</Text><Text style={s.small}>{candidates.length.toLocaleString()} matches{loading?' · Updating…':''}</Text></View>
+    {activity!=='all'&&<Text style={s.small}>{activity==='swimming'?'Comparing loaded coastal forecasts by lower waves and wind, then distance.':'Comparing loaded coastal forecasts by moderate waves, longer periods and lower wind, then distance.'} Only the displayed shortlist is compared. Other locations are not assessed. Official alerts lower ranking. These comparisons do not assess swimming safety or your skill level.</Text>}
+    {!beaches.length&&<View style={s.card}><Text style={s.section}>No beaches match yet.</Text><Text style={s.body}>{onlyFavorites?'Try saving a beach or turning off Favorites.':'Try a different name, activity, or a wider distance.'} Try the city / ZIP search for nearby beach records. Official catalogues may omit unnamed shoreline access points.</Text><Action label="Reset filters" onPress={()=>{updateQuery('');setOnlyFavorites(false);setActivity('all');setOrigin(undefined);setStateCode('');}}/></View>}
     {beaches.map(b=><BeachCard key={b.id} beach={b} conditions={conditions[b.id]} favorite={favorites.includes(b.id)} selected={b.id===selected} origin={origin} activity={activity} onSelect={()=>choose(b.id)} onFavorite={()=>toggleFavorite(b.id)} ready={loaded}/>)}
-    <Text style={s.small}>San Diego County catalogue · Forecasts update every 5 minutes while active. Location is used only on request, stays on this device, and is not stored. Favorites and alerts are stored on this device.</Text>
+    <View style={s.row}>{pageOffset>0&&<Action label="← Previous" onPress={()=>setPageOffset(n=>Math.max(0,n-12))}/>}<Text style={s.small}>Showing {Math.min(pageOffset+1,candidates.length)}–{Math.min(pageOffset+12,candidates.length)} of {candidates.length.toLocaleString()}</Text>{pageOffset+12<candidates.length&&<Action label="Next 12 →" onPress={()=>setPageOffset(n=>n+12)}/>}</View>
+    <Text style={s.small}>EPA / USGS nationwide catalogue · Includes coastal, Great Lakes and inland locations; public access and activity suitability are not guaranteed. Official records do not cover every unnamed beach. Forecasts load for the displayed shortlist only. Forecasts update every 5 minutes while active. Location is used only on request, stays on this device, and is not stored. Favorites and alerts are stored on this device.</Text>
   </>;
 }
 function BeachCard({beach,conditions,favorite,selected,origin,activity,onSelect,onFavorite,ready}:{beach:Beach;conditions?:Conditions;favorite:boolean;selected:boolean;origin?:Position;activity:Activity;onSelect:()=>void;onFavorite:()=>void;ready:boolean}) {
-  return <View style={[s.beachCard,selected&&{borderColor:'#18E0D1'}]}><Pressable accessibilityRole="button" accessibilityLabel={`View ${beach.name}`} onPress={onSelect} style={{flex:1,gap:8}}><Text style={s.section}>{beach.name}</Text><Text style={s.small}>{beach.area}{origin?` · ${distanceKm(origin,beach).toFixed(1)} km`:''}</Text><Text style={s.body}>{activityFit(beach,activity,conditions).reason}</Text><Text style={conditions?.alerts.length?s.warning:s.small}>{conditions?.alertsError?'Advisories unavailable':conditions?.alerts.length?`${conditions.alerts.length} official weather alert(s)`:conditions?'View conditions & advisories':'Loading forecast…'}{conditions&&isStale(conditions)?' · Saved data':''}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`${favorite?'Unfavorite':'Favorite'} ${beach.name}`} accessibilityState={{selected:favorite}} disabled={!ready} onPress={onFavorite} style={s.star}><Text style={{fontSize:25,color:'#18E0D1'}}>{favorite?'★':'☆'}</Text></Pressable></View>;
+  return <View style={[s.beachCard,selected&&{borderColor:'#18E0D1'}]}><Pressable accessibilityRole="button" accessibilityLabel={`View ${beach.name}`} onPress={onSelect} style={{flex:1,gap:8}}><Text style={s.section}>{beach.name}</Text><Text style={s.small}>{beach.area}{origin?` · ${distanceKm(origin,beach).toFixed(1)} km`:''}</Text><Text style={s.body}>{activityFit(beach,activity,conditions).reason}</Text><Text style={conditions?.alerts.length?s.warning:s.small}>{conditions?.alertsError?'Advisories unavailable':conditions?.alerts.length?`${conditions.alerts.length} official weather alert(s)`:conditions?'View conditions & advisories':'Select to load conditions'}{conditions&&isStale(conditions)?' · Saved data':''}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={`${favorite?'Unfavorite':'Favorite'} ${beach.name}`} accessibilityState={{selected:favorite}} disabled={!ready} onPress={onFavorite} style={s.star}><Text style={{fontSize:25,color:'#18E0D1'}}>{favorite?'★':'☆'}</Text></Pressable></View>;
 }
 function WaveChart({hours}:{hours:Conditions['hours']}) {
   const maximum=Math.max(1,...hours.map(h=>h.wave??0));
