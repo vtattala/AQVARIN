@@ -18,7 +18,10 @@
     "android": {
       "package": "com.aegiscoast.mobile",
       "versionCode": 1,
-      "permissions": ["android.permission.CAMERA", "android.permission.INTERNET"],
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.INTERNET"
+      ],
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.READ_EXTERNAL_STORAGE",
@@ -46,7 +49,15 @@
           "recordAudioAndroid": false,
           "barcodeScannerEnabled": false
         }
-      ]
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow AQVARIN to find beaches near you."
+        }
+      ],
+      "expo-notifications",
+      "expo-background-task"
     ],
     "web": {
       "bundler": "metro"

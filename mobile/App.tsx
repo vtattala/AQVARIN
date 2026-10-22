@@ -12,6 +12,7 @@ import type { AnalysisJob, DistressReport, TrackingFrame, RipCurrentReport } fro
 import Svg, { Rect as SvgRect, Text as SvgText } from 'react-native-svg';
 import { CLASS_COLORS, Icon, IconName, OceanArt, AqvarinMark, ObservationFill } from './src/ui';
 import LiveScreen from './src/LiveScreen';
+import DiscoverScreen from './src/discover/DiscoverScreen';
 
 type Recent = { id: string; name: string; server: string };
 type Selected = { uri: string; name: string; mimeType?: string; file?: File };
@@ -195,9 +196,10 @@ export default function App() {
   const [sceneType, setSceneType] = useState<'auto' | 'swimmers_only'>('auto');
   const [showServer, setShowServer] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
-  const [screen, setScreen] = useState<'monitor' | 'live' | 'analyses' | 'settings'>('monitor');
+  const [screen, setScreen] = useState<'discover' | 'monitor' | 'live' | 'analyses' | 'settings'>('discover');
   const scroll = useRef<ScrollView>(null);
-  const navigate = (next: 'monitor' | 'live' | 'analyses' | 'settings') => {
+  const discoverOffset = useRef(0);
+  const navigate = (next: 'discover' | 'monitor' | 'live' | 'analyses' | 'settings') => {
     setScreen(next);
     setShowServer(next === 'settings');
     scroll.current?.scrollTo({ y: 0, animated: false });
@@ -275,6 +277,7 @@ export default function App() {
   if (!fontsLoaded && !fontError) return <SafeAreaProvider><SafeAreaView style={[styles.safe, {justifyContent:'center',alignItems:'center'}]}><ActivityIndicator color="#18E0D1" accessibilityLabel="Loading AQVARIN" /></SafeAreaView></SafeAreaProvider>;
   return <SafeAreaProvider><SafeAreaView style={styles.safe}><ScrollView ref={scroll} contentContainerStyle={styles.page} keyboardShouldPersistTaps="handled">
     <View style={styles.header}><View style={styles.row}><AqvarinMark /><View><Text style={styles.brand}>AQVARIN</Text><Text style={styles.brandSub}>WATER INTELLIGENCE</Text></View></View><Pressable accessibilityRole="button" accessibilityLabel="Server settings" accessibilityState={{expanded:showServer}} onPress={() => navigate(screen === 'settings' ? 'monitor' : 'settings')} style={styles.serverToggle}><Icon name="tune" size={19} color="#18E0D1" /></Pressable></View>
+    <View onLayout={e => {discoverOffset.current=e.nativeEvent.layout.y;}} style={{display:screen === 'discover' ? 'flex' : 'none',gap:18}}><DiscoverScreen onMonitor={() => navigate('monitor')} onFocusBeach={offset => scroll.current?.scrollTo({y:discoverOffset.current+offset-12,animated:true})} /></View>
     {screen === 'live' && <LiveScreen server={server} />}
     {screen === 'monitor' && <>
       <View style={styles.hero}>
@@ -320,7 +323,7 @@ export default function App() {
     {job?.state === 'completed' && job.video_url && <View style={{gap:18, display:screen === 'monitor' ? 'flex' : 'none'}}><Results key={`${jobServer}/${job.job_id}`} job={job} frames={frames} client={client} visible={screen === 'monitor'} /></View>}
     {screen === 'analyses' && <View style={styles.card}><View style={styles.line}><Text style={styles.section}>Footage library</Text><View style={styles.badge}><Text style={styles.badgeText}>{recent.length} SAVED</Text></View></View>{!recent.length && <View style={styles.empty}><Icon name="layers" size={32} color="#469ab0" /><Text style={styles.section}>Your next insight starts here.</Text><Text style={styles.muted}>Analyzed videos will appear in this library.</Text><Button title="Analyze footage" icon="arrow" onPress={() => navigate('monitor')} /></View>}{recent.map(item => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Open ${item.name}`} disabled={!!busy} onPress={() => open(item)} style={({pressed}) => [styles.recentRow, busy && {opacity:.4}, pressed && {opacity:.7}]}><View style={styles.recentIcon}><Icon name="video" color="#58a8db" /></View><View style={{flex:1,gap:4}}><Text numberOfLines={2} style={styles.text}>{item.name}</Text><Text style={styles.muted}>Open saved analysis</Text></View><Icon name="right" size={16} /></Pressable>)}</View>}
     <View style={styles.footerBlock}><Text style={styles.label}>OCEAN · DATA · PEOPLE</Text><View style={styles.classLegend}>{CLASSES.map(c => <View key={c} style={styles.row}><View style={[styles.dot,{backgroundColor:CLASS_COLORS[c]}]} /><Text style={styles.footer}>{LABELS[c]}</Text></View>)}</View></View>
-  </ScrollView><View style={styles.navWrap}><View style={styles.bottomNav}>{([{key:'monitor',label:'Monitor',icon:'monitor'},{key:'live',label:'Live',icon:'camera'},{key:'analyses',label:'Analyses',icon:'layers'},{key:'settings',label:'Settings',icon:'tune'}] as const).map(item => <Pressable key={item.key} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{selected:screen === item.key}} onPress={() => navigate(item.key)} style={[styles.navItem, screen === item.key && styles.navActive]}><Icon name={item.icon} size={21} color={screen === item.key ? '#18E0D1' : '#89a5b7'} /><Text style={[styles.navLabel, screen === item.key && {color:'#18E0D1'}]}>{item.label}</Text></Pressable>)}</View></View></SafeAreaView></SafeAreaProvider>;
+  </ScrollView><View style={styles.navWrap}><View style={styles.bottomNav}>{([{key:'discover',label:'Discover',icon:'compass'},{key:'monitor',label:'Monitor',icon:'monitor'},{key:'live',label:'Live',icon:'camera'},{key:'analyses',label:'Analyses',icon:'layers'},{key:'settings',label:'Settings',icon:'tune'}] as const).map(item => <Pressable key={item.key} accessibilityRole="tab" accessibilityLabel={item.label} accessibilityState={{selected:screen === item.key}} onPress={() => navigate(item.key)} style={[styles.navItem, screen === item.key && styles.navActive]}><Icon name={item.icon} size={21} color={screen === item.key ? '#18E0D1' : '#89a5b7'} /><Text style={[styles.navLabel, screen === item.key && {color:'#18E0D1'}]}>{item.label}</Text></Pressable>)}</View></View></SafeAreaView></SafeAreaProvider>;
 }
 
 const BODY_FONT = 'PoppinsRegular';

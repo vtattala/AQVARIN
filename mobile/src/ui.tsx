@@ -34,6 +34,9 @@ export const CLASS_COLORS: Record<string, string> = {
 };
 
 const paths = {
+  compass: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20m4 6-2 6-6 2 2-6 6-2',
+  search: 'M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',
+  bell: 'M18 8a6 6 0 0 0-12 0v6l-2 3h16l-2-3V8m-9 12h6',
   camera: 'M3 7h4l2-3h6l2 3h4v13H3zM16 13a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
   upload: 'M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5',
   video: 'M4 4h16v16H4zM4 8h16M8 4v4m8-4v4m-6 4 5 3-5 3z',

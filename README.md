@@ -19,6 +19,19 @@ analysis process on a computer. The model files are included here, but inference
 is not yet implemented on the phone. No cloud deployment or offline conversion
 is included in this snapshot.
 
+## Beach discovery
+
+The new **Discover** tab explores 14 San Diego County beaches on an interactive
+map. Search by beach/city, use your location, compare swimming/surfing conditions,
+view wave/wind/temperature forecasts, and save favorites. Favorite-beach alerts
+follow official NWS weather advisories; county water-quality notices are linked
+separately. Discovery does not need the analysis computer.
+
+Run `npm ci` inside `mobile`, then `npm run web`. Native apps must be rebuilt for
+the added location/notification modules; the old Pixel APK is unchanged. Background
+alert delivery is OS-scheduled and may be delayed. See
+[discovery setup, data sources and limits](docs/beach-discovery.md).
+
 ## Quick start (Windows, Python 3.12, Node.js)
 
 ```powershell
