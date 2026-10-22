@@ -91,8 +91,8 @@ archives are cached outside the source tree and are not included in the app.
   local weather remains available. Proximity does not verify water type or
   local bathing/surfing suitability; the UI labels the offshore model limitation.
 - NWS: active alerts for the U.S. and territories only. International records
-  explicitly show that monitoring is unsupported; they never call NWS or claim
-  an all-clear. Only Actual, noncancelled, nonexpired messages are shown.
+  explicitly show that the official feed is unsupported; worldwide forecast
+  checks run separately. They never call NWS or claim an official all-clear. Only Actual, noncancelled, nonexpired messages are shown.
   A failed supported feed stays unknown.
 - Water quality/closures: links to the relevant official beach-programme lookup;
   the San Diego county link is used only for San Diego records. Other states
@@ -136,8 +136,8 @@ location is requested only on tapping Near me, stays in memory and is not stored
 
 Original favorite IDs remain valid, and national EPA/USGS IDs can be favorited
 and checked by the same foreground/background alert service where NWS is supported.
-International favorites persist but are not monitored for official alerts. With
-only international favorites, the alert service reports this coverage limit. Preferences,
+Every favorite, in any country, is checked for AQVARIN forecast alerts.
+Official NWS warnings remain an additional source for supported U.S. locations. Preferences,
 deduplication keys, condition cache and a bounded 50-notice inbox are on-device.
 Removing a favorite or disabling alerts stops its future notifications. Existing
 notices remain until expired. Each beach/alert ID/sent-time combination is
@@ -170,3 +170,39 @@ conditions and explicit international advisory coverage. Native background deliv
 requires physical-device validation on a rebuilt app.
 
 Global source: https://www.geonames.org/ and https://download.geonames.org/export/dump/
+
+## Worldwide forecast alerts
+
+Every catalogue entry can be favorited and monitored, without a country gate.
+Open-Meteo hourly weather and available regional ocean models supply a rolling
+12-hour window. The UI and optional notifications clearly label these as
+AQVARIN forecast alerts, separate from official government warnings:
+
+- Wave height at least 2 m, where ocean coverage is supported.
+- Wind at least 35 km/h or gusts at least 50 km/h.
+- Thunderstorm weather codes 95, 96 or 99.
+- UV index at least 8.
+
+These are product thresholds, not official hazard thresholds, a rip-current
+model, a local closure feed or a declaration of safe conditions. Each result
+shows its forecast window, source and limitations. Missing / stale model samples
+cannot trigger a threshold or establish an all-clear. Known lakes never borrow
+an ocean forecast; unclassified waters still require a nearby ocean grid.
+Weather checks require at least 11 hourly values per rule within the next 12
+hours to report a complete check. Incomplete checks still preserve valid
+positive alerts and existing notices. Failure status is shown, including when
+only some favorites can be checked.
+
+The same beach/rule/UTC-day is notified once to avoid repeated notifications
+while a threshold stays exceeded. A new UTC day can notify again. Notices are
+snapshots of the forecast when issued, expire after their last forecasted
+exceedance hour, and do not send an all-clear when they expire. Removing a
+favorite or pausing alerts stops new notifications. Browser checks require the
+app to remain open; native background checks depend on OS scheduling. No cloud
+push backend is included. Alert checks visit saved favorites, never all 22,228
+locations in the background. Current displayed results show forecast alerts
+without requiring the user to enable notifications.
+
+Additional tests exercise international favorite notification delivery,
+deduplication, unsubscribe, failed sources, forecast freshness and rule values.
+Weather API variables and codes: https://open-meteo.com/en/docs

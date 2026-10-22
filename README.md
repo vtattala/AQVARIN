@@ -25,8 +25,8 @@ The **Discover** tab explores 22,228 beach records across 170 countries and
 territories on a clustered world map. Search beach names and multilingual aliases,
 filter by country or U.S. state, find a city worldwide, explore nearby beaches,
 compare available swimming/surfing forecasts, and save favorites. Ocean forecasts
-are shown where supported; official alert monitoring covers U.S. beaches and
-territories. Water quality and local closures are not automatically monitored.
+are shown where supported. Forecast alerts cover every saved beach worldwide,
+with official warnings additionally available for U.S. beaches and territories. Water quality and local closures are not automatically monitored.
 Discovery does not need the analysis computer.
 
 Run `npm ci` inside `mobile`, then `npm run web`. Native apps must be rebuilt for

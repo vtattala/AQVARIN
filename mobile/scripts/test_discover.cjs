@@ -111,3 +111,28 @@ test('date-line neighbors stay geographically near and map wraps around its cent
  const {mapDocument}=require('../src/discover/mapDocument.ts');const html=mapDocument({beaches:BEACHES.filter(b=>b.country==='FJ'),selected:'',favorites:[],alerts:[]});
  assert.ok(html.includes('longitudes.forEach'));assert.ok(html.includes('map.getCenter().lng'));
 });
+test('worldwide forecast rules use timestamped thresholds, not country or missing values',()=>{
+ const {forecastAlerts}=require('../src/discover/forecastAlerts.ts');const beach=BEACHES.find(b=>b.country==='AU');
+ const future=Math.ceil(now/3600000)*3600;
+ const weather={hourly:{time:[future],wind_speed_10m:[35],wind_gusts_10m:[50],weather_code:[95],uv_index:[8]}};
+ const marine={hourly:{time:[future],wave_height:[2]}};
+ const alerts=forecastAlerts(beach,marine,weather,now);assert.equal(alerts.length,5);assert.ok(alerts.every(a=>a.kind==='forecast'&&Date.parse(a.expires)>now));
+ assert.equal(forecastAlerts(beach,null,{},now).length,0);
+ assert.equal(forecastAlerts(beach,{hourly:{time:[future+48*3600],wave_height:[10]}},{},now).length,0);
+ assert.deepEqual(forecastAlerts(beach,marine,weather,now+60000).map(a=>[a.id,a.sent]),alerts.map(a=>[a.id,a.sent]));
+});
+test('any international favorite can notify, deduplicate, unsubscribe, and report an outage',async()=>{
+ const Module=require('node:module'),originalLoad=Module._load,originalFetch=global.fetch;
+ const store=new Map(),notifications=[];const storage={getItem:async k=>store.get(k)??null,multiSet:async pairs=>pairs.forEach(([k,v])=>store.set(k,v))};
+ Module._load=function(request,parent,isMain){if(request==='@react-native-async-storage/async-storage')return {__esModule:true,default:storage};if(request==='./device'&&parent?.filename.endsWith('/alerts.ts'))return {notify:async(...args)=>notifications.push(args)};return originalLoad.apply(this,arguments);};
+ const file=require.resolve('../src/discover/alerts.ts');delete require.cache[file];
+ const b=BEACHES.find(b=>b.country==='AU'),future=Math.ceil(Date.now()/3600000)*3600;
+ global.fetch=async url=>{assert.ok(!url.includes('weather.gov'));return {ok:true,json:async()=>({latitude:b.latitude,longitude:b.longitude,current:{time:Date.now()/1000,temperature_2m:22,wind_speed_10m:40},hourly:{time:Array.from({length:24},(_,i)=>future+i*3600),wave_height:Array(24).fill(.5),wind_speed_10m:Array(24).fill(40),wind_gusts_10m:Array(24).fill(45),weather_code:Array(24).fill(0),uv_index:Array(24).fill(3)}})};};
+ try{
+  const service=require('../src/discover/alerts.ts');store.set(service.WATCH_KEY,JSON.stringify({favorites:[b.id],enabled:true}));
+  assert.match(await service.checkFavoriteAlerts(),/Checked 1\/1/);await service.checkFavoriteAlerts();
+  assert.equal(notifications.length,1);assert.equal(JSON.parse(store.get(service.INBOX_KEY))[0].alert.kind,'forecast');
+  store.set(service.WATCH_KEY,JSON.stringify({favorites:[],enabled:true}));await service.checkFavoriteAlerts();assert.equal(notifications.length,1);
+  store.set(service.WATCH_KEY,JSON.stringify({favorites:[b.id],enabled:true}));global.fetch=async()=>{throw Error('offline');};await assert.rejects(()=>service.checkFavoriteAlerts(),/unknown/);assert.equal(JSON.parse(store.get(service.INBOX_KEY)).length,1);
+ }finally{Module._load=originalLoad;global.fetch=originalFetch;delete require.cache[file];}
+});
