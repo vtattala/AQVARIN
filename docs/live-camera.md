@@ -206,3 +206,10 @@ Reproduce the real-model transport test with:
 
 This script samples the saved file using elapsed wall time and explicitly does
 not claim to validate physical camera capture or permission prompts.
+
+## Raspberry Pi camera source
+
+Live also supports a Raspberry Pi 4 + Camera Module 3 through the authenticated
+Picamera2 camera service. Use preview-only mode to verify the feed before
+starting analysis. Frames still pass through the existing Live API; model
+behavior is unchanged. See [Pi SSH and camera setup](raspberry-pi-camera.md).

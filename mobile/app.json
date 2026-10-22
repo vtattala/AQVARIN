@@ -12,7 +12,8 @@
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true,
           "NSAllowsArbitraryLoads": true
-        }
+        },
+        "NSLocalNetworkUsageDescription": "Allow AQVARIN to connect to your Raspberry Pi camera and analysis server on your local network."
       }
     },
     "android": {

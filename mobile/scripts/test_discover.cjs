@@ -164,3 +164,16 @@ test('a photo-source outage preserves the sourced beach overview and travel list
  };
  try{const brief=await fetchTravelBrief(beach);assert.equal(brief.photo,undefined);assert.equal(brief.description,'A sandy beach in La Jolla.');assert.equal(brief.food[0].name,'Seaside Cafe');assert.ok(brief.errors.length);}finally{global.fetch=original;}
 });
+test('Pi camera addresses require a separate token and a root HTTP URL',()=>{
+ const {piCameraUrl}=require('../src/piCamera.ts');assert.equal(piCameraUrl(' http://aqvarin-pi.local:8001/ '),'http://aqvarin-pi.local:8001');
+ for(const url of ['file:///camera','http://user:secret@pi.local','http://pi.local?token=secret','http://pi.local/path'])assert.throws(()=>piCameraUrl(url));
+});
+test('Pi transport authenticates JPEGs and rejects stale, repeated and invalid frames',async()=>{
+ const {piFrame}=require('../src/piCamera.ts'),original=global.fetch;const jpg=new Uint8Array([255,216,1,2,255,217]);let sequence=2,age=20,body=jpg;
+ global.fetch=async(url,options)=>{assert.ok(url.endsWith('/api/camera/frame?after=1'));assert.equal(options.headers.Authorization,'Bearer example-camera-token');return new Response(body,{headers:{'Content-Type':'image/jpeg','X-Camera-Sequence':String(sequence),'X-Frame-Age-Ms':String(age)}});};
+ try{assert.deepEqual((await piFrame('http://pi.local:8001','example-camera-token',1)).bytes,jpg);age=3000;await assert.rejects(()=>piFrame('http://pi.local:8001','example-camera-token',1),/old frame/);age=10;sequence=1;await assert.rejects(()=>piFrame('http://pi.local:8001','example-camera-token',1),/old frame/);sequence=2;body=new Uint8Array([1,2,3,4]);await assert.rejects(()=>piFrame('http://pi.local:8001','example-camera-token',1),/JPEG/);}finally{global.fetch=original;}
+});
+test('Pi camera denied tokens and missing tokens produce useful errors',async()=>{
+ const {piRequest}=require('../src/piCamera.ts'),original=global.fetch;
+ try{await assert.rejects(()=>piRequest('http://pi.local:8001','','/api/camera/health'),/token/);global.fetch=async()=>new Response('{"detail":"unauthorized"}',{status:401});await assert.rejects(()=>piRequest('http://pi.local:8001','wrong','/api/camera/health'),/rejected/);}finally{global.fetch=original;}
+});

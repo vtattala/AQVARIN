@@ -19,6 +19,15 @@ analysis process on a computer. The model files are included here, but inference
 is not yet implemented on the phone. No cloud deployment or offline conversion
 is included in this snapshot.
 
+## Raspberry Pi camera
+
+Raspberry Pi 4 + Camera Module 3 can supply the Live camera feed through the
+Picamera2 service. Select **Raspberry Pi camera** in Live, enter its LAN address
+and camera token, and test with preview-only mode. AI analysis still uses the
+existing analysis computer. See [SSH setup and camera connection](docs/raspberry-pi-camera.md).
+Physical camera operation still needs validation on your Pi; protocol tests
+and app exports do not establish hardware performance.
+
 ## Beach discovery
 
 The **Discover** tab explores 22,228 beach records across 170 countries and
