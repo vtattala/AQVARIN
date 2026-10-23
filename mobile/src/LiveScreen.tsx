@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Image, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {PI_PROFILE_KEY,parsePiProfile} from './piCameraProfile';
 import CameraInput from './CameraInput';
 import PiCameraInput from './PiCameraInput';
 import {piCameraUrl,piRequest} from './piCamera';
@@ -20,6 +22,18 @@ export default function LiveScreen({server}:{server:string}) {
   const [analysisEnabled,setAnalysisEnabled]=useState(true);
   const [source,setSource]=useState<'device'|'pi'>('device');
   const [piAddress,setPiAddress]=useState('http://aqvarin-pi.local:8001'),[piToken,setPiToken]=useState(''),[piStatus,setPiStatus]=useState(''),[testingPi,setTestingPi]=useState(false);
+  const [piSaved,setPiSaved]=useState(false),[piSettings,setPiSettings]=useState(true),[piLoaded,setPiLoaded]=useState(false);
+  useEffect(()=>{let mounted=true;void AsyncStorage.getItem(PI_PROFILE_KEY).then(raw=>{const profile=parsePiProfile(raw);if(mounted&&profile){setPiAddress(profile.address);setPiToken(profile.token);setSource('pi');setPiSaved(true);setPiSettings(false);}}).catch(()=>{}).finally(()=>{if(mounted)setPiLoaded(true);});return()=>{mounted=false;};},[]);
+  function rememberPi(){
+    const profile={version:1,address:piCameraUrl(piAddress),token:piToken.trim()};
+    void AsyncStorage.setItem(PI_PROFILE_KEY,JSON.stringify(profile)).then(()=>{setPiSaved(true);setPiSettings(false);}).catch(()=>setPiStatus('Connected, but settings could not be saved on this device.'));
+  }
+  async function forgetPi(){
+    setTestingPi(true);
+    try{await AsyncStorage.removeItem(PI_PROFILE_KEY);setPiToken('');setPiAddress('http://aqvarin-pi.local:8001');setPiSaved(false);setPiSettings(true);setPiStatus('Saved Pi removed.');setError('');}
+    catch{setError('Could not remove the saved Pi. Try again.');}
+    finally{setTestingPi(false);}
+  }
   const [facing,setFacing] = useState<'front'|'back'>('back');
   const [devices,setDevices] = useState<{id:string;label:string}[]>([]);
   const [deviceId,setDeviceId] = useState<string>();
@@ -108,20 +122,43 @@ export default function LiveScreen({server}:{server:string}) {
     <View style={{gap:9}}><Text style={s.eyebrow}>LIVE CAMERA</Text><Text style={s.title}>A watch in real time.</Text><Text style={s.text}>Swimmers, vessels, drowning indicators, and visual rip-current candidates from your camera.</Text></View>
     <View style={s.card}>
       <View style={s.row}><Text style={s.heading}>Camera feed</Text><Text style={s.accent}>{active ? state==='Live analysis' ? '● LIVE' : state==='Pi camera preview'?'PREVIEW':'CONNECTING' : 'OFF'}</Text></View>
-      {active ? source==='pi'?<PiCameraInput ref={camera} address={piAddress} token={piToken} onReady={()=>{if(analysisEnabled)void run();else setState('Pi camera preview');}} onError={e=>{setError(e);setPiStatus('');stop('Pi camera unavailable');}}/>:<CameraInput ref={camera} deviceId={deviceId} facing={facing} onReady={()=>void run()} onDevices={setDevices} onError={e=>{setError(e);stop('Camera unavailable');}}/>:<View style={s.placeholder}><Text style={s.heading}>{source==='pi'?'Connect your Pi camera.':'Your camera, connected.'}</Text><Text style={[s.text,{textAlign:'center'}]}>{source==='pi'?'Connect Camera Module 3 through the Pi camera service.':'Start to enable the camera and continuous analysis.'}</Text></View>}
+      {active ? source==='pi'?<PiCameraInput ref={camera} address={piAddress} token={piToken} onReady={()=>{rememberPi();if(analysisEnabled)void run();else setState('Pi camera preview');}} onError={e=>{setError(e);setPiStatus('');stop('Pi camera unavailable');}}/>:<CameraInput ref={camera} deviceId={deviceId} facing={facing} onReady={()=>void run()} onDevices={setDevices} onError={e=>{setError(e);stop('Camera unavailable');}}/>:<View style={s.placeholder}><Text style={s.heading}>{source==='pi'?'Connect your Pi camera.':'Your camera, connected.'}</Text><Text style={[s.text,{textAlign:'center'}]}>{source==='pi'?'Connect Camera Module 3 through the Pi camera service.':'Start to enable the camera and continuous analysis.'}</Text></View>}
       {!active && <>
-        <Text style={s.label}>CAMERA SOURCE</Text>
-        <View style={s.wrap}>{(['device','pi'] as const).map(value=><Pressable key={value} accessibilityRole="button" accessibilityState={{selected:source===value}} onPress={()=>{setSource(value);setError('');}} style={[s.pill,source===value&&s.selected]}><Text style={s.small}>{value==='pi'?'Raspberry Pi camera':'This device'}</Text></Pressable>)}</View>
-        {source==='pi'?<View style={{gap:10}}><Text style={s.label}>PI CAMERA ADDRESS</Text><TextInput accessibilityLabel="Pi camera address" value={piAddress} editable={!testingPi} onChangeText={v=>{setPiAddress(v);setPiStatus('');}} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={[s.text,{borderWidth:1,borderColor:'#2a3b48',borderRadius:12,padding:12}]}/><Text style={s.label}>CAMERA TOKEN</Text><TextInput accessibilityLabel="Pi camera token" value={piToken} editable={!testingPi} onChangeText={v=>{setPiToken(v);setPiStatus('');}} placeholder="Token printed in the Pi terminal" placeholderTextColor="#98b5c6" autoCapitalize="none" autoCorrect={false} secureTextEntry style={[s.text,{borderWidth:1,borderColor:'#2a3b48',borderRadius:12,padding:12}]}/><Pressable accessibilityRole="button" disabled={testingPi} onPress={()=>{setTestingPi(true);setPiStatus('');void piRequest(piAddress,piToken,'/api/camera/health').then(r=>r.json()).then(h=>setPiStatus(`Pi camera ready · ${h.width} × ${h.height} · ${h.capture_fps} capture FPS`)).catch(e=>setPiStatus(e instanceof Error?e.message:'Pi connection failed.')).finally(()=>setTestingPi(false));}} style={s.pill}><Text style={s.small}>{testingPi?'Checking Pi…':'Test Pi connection'}</Text></Pressable>{!!piStatus&&<Text style={s.small}>{piStatus}</Text>}<Text style={s.small}>Pi → AQVARIN app → analysis server. The Pi provides video; detection runs at {base}, configured in Settings. Keep both devices on the same network. The token stays in this screen and is not saved.</Text></View>:<><Text style={s.label}>CAMERA</Text><View style={s.wrap}>{Platform.OS==='web' && devices.length ? devices.map(d=><Pressable key={d.id} accessibilityRole="button" onPress={()=>setDeviceId(d.id)} style={[s.pill,deviceId===d.id&&s.selected]}><Text style={s.small}>{d.label}</Text></Pressable>):(['back','front'] as const).map(f=><Pressable accessibilityRole="button" key={f} onPress={()=>setFacing(f)} style={[s.pill,facing===f&&s.selected]}><Text style={s.small}>{f==='back'?Platform.OS==='web'?'Default camera':'Rear camera':'Front camera'}</Text></Pressable>)}</View></>}
+        {(!piSaved||source!=='pi'||piSettings)&&<>
+          <Text style={s.label}>CAMERA SOURCE</Text>
+          <View style={s.wrap}>{(['device','pi'] as const).map(value=><Pressable key={value} accessibilityRole="button" accessibilityState={{selected:source===value}} onPress={()=>{setSource(value);setError('');}} style={[s.pill,source===value&&s.selected]}><Text style={s.small}>{value==='pi'?'Raspberry Pi camera':'This device'}</Text></Pressable>)}</View>
+        </>}
+        {source==='pi'?<View style={{gap:10}}>
+          {piSaved&&!piSettings?<>
+            <Text style={s.heading}>Your Raspberry Pi</Text>
+            <View pointerEvents="none" style={{gap:10}}>
+              <Text style={s.label}>PI CAMERA ADDRESS</Text>
+              <TextInput accessibilityLabel="Pi camera address placeholder" accessibilityState={{disabled:true}} value="" editable={false} placeholder="Enter Pi camera address" placeholderTextColor="#98b5c6" style={[s.text,{borderWidth:1,borderColor:'#2a3b48',borderRadius:12,padding:12}]}/>
+              <Text style={s.label}>CAMERA TOKEN</Text>
+              <TextInput accessibilityLabel="Pi camera token placeholder" accessibilityState={{disabled:true}} value="" editable={false} placeholder="Enter camera token" placeholderTextColor="#98b5c6" style={[s.text,{borderWidth:1,borderColor:'#2a3b48',borderRadius:12,padding:12}]}/>
+            </View>
+          </>:<>
+            <Text style={s.label}>PI CAMERA ADDRESS</Text>
+            <TextInput accessibilityLabel="Pi camera address" value={piAddress} editable={piLoaded&&!testingPi} onChangeText={v=>{setPiAddress(v);setPiStatus('');}} autoCapitalize="none" autoCorrect={false} keyboardType="url" style={[s.text,{borderWidth:1,borderColor:'#2a3b48',borderRadius:12,padding:12}]}/>
+            <Text style={s.label}>CAMERA TOKEN</Text>
+            <TextInput accessibilityLabel="Pi camera token" value={piToken} editable={piLoaded&&!testingPi} onChangeText={v=>{setPiToken(v);setPiStatus('');}} placeholder="Token printed in the Pi terminal" placeholderTextColor="#98b5c6" autoCapitalize="none" autoCorrect={false} secureTextEntry style={[s.text,{borderWidth:1,borderColor:'#2a3b48',borderRadius:12,padding:12}]}/>
+            <Text style={s.small}>The address and camera token are saved on this device after a successful connection.</Text>
+            <Pressable accessibilityRole="button" disabled={!piLoaded||testingPi} onPress={()=>{setTestingPi(true);setPiStatus('');void piRequest(piAddress,piToken,'/api/camera/health').then(r=>r.json()).then(h=>setPiStatus(`Pi camera ready · ${h.width} × ${h.height} · ${h.capture_fps} capture FPS`)).catch(e=>setPiStatus(e instanceof Error?e.message:'Pi connection failed.')).finally(()=>setTestingPi(false));}} style={s.pill}><Text style={s.small}>{testingPi?'Checking Pi…':'Test Pi connection'}</Text></Pressable>
+            {piSaved&&<Pressable accessibilityRole="button" disabled={testingPi} onPress={()=>void forgetPi()} style={s.pill}><Text style={s.small}>Forget saved Pi</Text></Pressable>}
+          </>}
+          {!!piStatus&&<Text style={s.small}>{piStatus}</Text>}
+        </View>:<><Text style={s.label}>CAMERA</Text><View style={s.wrap}>{Platform.OS==='web' && devices.length ? devices.map(d=><Pressable key={d.id} accessibilityRole="button" onPress={()=>setDeviceId(d.id)} style={[s.pill,deviceId===d.id&&s.selected]}><Text style={s.small}>{d.label}</Text></Pressable>):(['back','front'] as const).map(f=><Pressable accessibilityRole="button" key={f} onPress={()=>setFacing(f)} style={[s.pill,facing===f&&s.selected]}><Text style={s.small}>{f==='back'?Platform.OS==='web'?'Default camera':'Rear camera':'Front camera'}</Text></Pressable>)}</View></>}
+        {(source!=='pi'||piSettings)&&<>
         <Text style={s.label}>SCENE</Text>
         <View style={s.wrap}>{(['auto','swimmers_only'] as const).map(value => <Pressable accessibilityRole="button" key={value} onPress={() => setScene(value)} style={[s.pill,scene===value && s.selected]}><Text style={s.small}>{value==='auto'?'All objects':'Swimmers only'}</Text></Pressable>)}</View>
+        </>}
       </>}
-      <Pressable accessibilityRole="button" accessibilityLabel={active?'Stop live camera':'Start live camera'} onPress={() => {if(active)stop();else begin();}} style={[s.button,active && {backgroundColor:'#263f4a'}]}><Text style={[s.buttonText,active && {color:'#D7F8FF'}]}>{active?'Stop live camera':'Start live camera'}</Text></Pressable>
-      {!active&&source==='pi'&&<Pressable accessibilityRole="button" onPress={()=>begin(false)} style={s.pill}><Text style={s.small}>Preview Pi camera without analysis</Text></Pressable>}
+      <Pressable accessibilityRole="button" accessibilityLabel={source==='pi'?(active?'Disconnect':'Connect'):(active?'Stop live camera':'Start live camera')} disabled={source==='pi'&&(!piLoaded||testingPi)} onPress={() => {if(active)stop();else begin(source!=='pi');}} style={[s.button,active && {backgroundColor:'#263f4a'}]}><Text style={[s.buttonText,active && {color:'#D7F8FF'}]}>{source==='pi'?(active?'Disconnect':'Connect'):(active?'Stop live camera':'Start live camera')}</Text></Pressable>
+      {!active&&source==='pi'&&piSettings&&<Pressable accessibilityRole="button" disabled={!piLoaded||testingPi} onPress={()=>begin(true)} style={s.pill}><Text style={s.small}>Connect with AI analysis</Text></Pressable>}
       <Text style={s.small}>{state}</Text>
       {!!error && <Text accessibilityRole="alert" style={s.error}>{error}</Text>}
       {active && !['Live analysis','Pi camera preview'].includes(state) && <ActivityIndicator color="#18E0D1" />}
-      <Text style={s.small}>{analysisEnabled?'Camera frames are sent to your analysis server while this page is active. No audio is captured and live frames are not saved.':'Preview only: frames are displayed in this app. Detection is off. No audio is captured.'}</Text>
+      <Text style={s.small}>{(active?analysisEnabled:source!=='pi')?'Camera frames are sent to your analysis server while this page is active. No audio is captured and live frames are not saved.':active?'Preview only: frames are displayed in this app. Detection is off. No audio is captured.':piSaved?'Connect uses your saved Pi setup.':'Connect displays your Pi camera.'}</Text>
     </View>
     {!!result && <>
       <View style={s.card}>

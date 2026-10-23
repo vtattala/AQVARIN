@@ -69,7 +69,11 @@ Alternatively, from a full repository checkout run `python3 scripts/pi_camera.py
 The service prints **Pi camera ready** and a camera token. Keep that terminal
 running. Copy the token into the app's camera-token field. It is retained in a
 local file with mode 0600 and reused after restarts; it is not a Git-tracked
-configuration. The app does not persist the token across Live-screen unmounts.
+configuration. After a successful connection, the app saves the address and camera
+token on this device. In the saved Pi presentation, the empty address/token
+fields are display-only; Connect uses the stored profile. Camera settings are
+editable only during initial pairing. Clearing the app/browser data removes
+the saved profile.
 Ctrl+C stops the service and releases the hardware camera.
 
 In a second Mac Terminal window, SSH in again and run `hostname -I` if you need
@@ -87,11 +91,14 @@ or `http://PI_WIFI_IP:8001`. Use the Pi address, not the Mac's or phone's addres
 2. Choose **Raspberry Pi camera** under Camera source.
 3. Enter the camera address above and the token printed by the Pi.
 4. Tap **Test Pi connection**. It should report the camera size and capture FPS.
-5. Tap **Preview Pi camera without analysis** to verify the actual camera image.
+5. Tap **Connect** to see the actual camera image. The next visit restores your
+   Pi settings and needs only Connect. The empty placeholder fields in the
+   saved view do not change them. Connection starts only when you press it.
    This mode sends no frames to an analysis server and performs no detection.
 6. Stop preview. For AI results, start the existing Python analysis server on
    the analysis computer and set its network-reachable port-8000 URL in the
-   app's Settings. Then return to Live and tap **Start live camera**.
+   app's Settings. **Connect with AI analysis** is available during initial Pi
+   pairing. The saved Pi presentation uses Connect for camera preview only.
 
 The Pi, app device and analysis computer must be mutually reachable. For beach
 use with the current architecture, bring the analysis computer and connect it
@@ -163,3 +170,52 @@ Official references:
 - https://www.raspberrypi.com/documentation/accessories/camera.html
 - https://www.raspberrypi.com/documentation/computers/camera_software.html
 - https://datasheets.raspberrypi.com/camera/picamera2-manual.pdf
+
+## One-time setup for Connect without Terminal (Mac + Pi)
+
+From a full checkout, stop the manual SSH camera connection with Ctrl+C, so
+port 8766 is free. At the **Mac** prompt (not inside SSH), run:
+
+```sh
+python3 scripts/setup_pi_connect.py
+```
+
+A standalone bundled copy can also be run from any directory. Setup asks for
+SSH authentication once and does not save the Pi password. It needs the camera
+packages installed and the existing `~/aqvarin-camera/camera-token.local` file.
+The Pi login must have passwordless sudo, as Raspberry Pi Imager users normally
+do; if sudo is restricted, setup stops with the error rather than prompting in
+an unattended service. Use `--dry-run` to inspect the plan without changes.
+
+Setup installs `aqvarin-camera.service` on the Pi, preserving the camera token,
+and enables it at boot with automatic restart on failure. On the Mac, it creates
+an app-specific SSH key under `~/Library/Application Support/AQVARIN/`, adds its
+public key to the Pi with a camera-only forwarding restriction and a forced
+command that disallows remote shell execution, and installs the login agent
+`~/Library/LaunchAgents/com.aqvarin.pi-camera-link.plist`. This agent reconnects
+the loopback-only port-8766 camera link without a Terminal window. Your normal
+SSH login is unchanged. The private key is mode 0600; it is not put in the app.
+
+Use `http://127.0.0.1:8766` and your existing camera token in the Mac web app,
+then Connect once to save them. Every subsequent session: enable the same
+hotspot, connect the Mac, power the Pi, wait for boot/reconnection, open Live,
+and press **Connect**. It also works on another shared network with the same Pi
+hostname. The Mac must be awake and logged in, and both devices must be on the
+same reachable network. This setup is camera preview; AI needs the separate
+analysis server. A browser cannot start a powered-off Pi or connect it to Wi-Fi.
+
+Setup verifies authenticated camera health on the Pi and then a 401 response
+through the local SSH link (expected without a bearer token). If verification
+fails, it reports which part is not ready; it does not claim the setup worked.
+Link errors: `~/Library/Application Support/AQVARIN/camera-link-error.log`.
+
+To stop autostart on the Mac:
+
+```sh
+launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.aqvarin.pi-camera-link.plist
+```
+
+Remove that plist to prevent loading it at next login. On the Pi, disable the
+camera with `sudo systemctl disable --now aqvarin-camera`. To revoke the Mac
+camera key, remove the line ending in `aqvarin-camera-only` from the Pi's
+`~/.ssh/authorized_keys`. Do not delete other keys.

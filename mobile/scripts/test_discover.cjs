@@ -177,3 +177,12 @@ test('Pi camera denied tokens and missing tokens produce useful errors',async()=
  const {piRequest}=require('../src/piCamera.ts'),original=global.fetch;
  try{await assert.rejects(()=>piRequest('http://pi.local:8001','','/api/camera/health'),/token/);global.fetch=async()=>new Response('{"detail":"unauthorized"}',{status:401});await assert.rejects(()=>piRequest('http://pi.local:8001','wrong','/api/camera/health'),/rejected/);}finally{global.fetch=original;}
 });
+
+const {parsePiProfile}=require('../src/piCameraProfile.ts');
+test('saved Pi survives reload with normalized address and separate token',()=>{
+  const token='test-only-camera-token-for-profile';
+  assert.deepEqual(parsePiProfile(JSON.stringify({version:1,address:'http://127.0.0.1:8766/',token:` ${token} `})),{version:1,address:'http://127.0.0.1:8766',token});
+});
+test('corrupt, unsupported, and credential-bearing saved Pi settings are ignored',()=>{
+  for(const raw of [null,'{','null','{}',JSON.stringify({version:2,address:'http://localhost',token:'x'}),JSON.stringify({version:1,address:'http://user:secret@localhost',token:'x'}),JSON.stringify({version:1,address:'javascript:alert(1)',token:'x'}),JSON.stringify({version:1,address:'http://localhost',token:''})]) assert.equal(parsePiProfile(raw),null);
+});

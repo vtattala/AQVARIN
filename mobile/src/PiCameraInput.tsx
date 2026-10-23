@@ -16,7 +16,8 @@ export default forwardRef<CameraHandle,Props>(function PiCameraInput(props,ref){
       pending=task;void task.finally(()=>{if(pending===task)pending=undefined;}).catch(()=>{});return task;
     };
     capture.current=async()=>{if(pending)await pending;if(!active)throw Error('Pi camera stopped.');return take();};
-    const preview=async()=>{try{await take();if(!active)return;if(!ready){ready=true;callbacks.current.onReady();}timer=setTimeout(()=>void preview(),300);}catch(e){if(active)callbacks.current.onError(e instanceof Error?e.message:'Pi camera unavailable.');}};
+    const preview=async()=>{try{await take();if(!active)return;if(!ready){ready=true;callbacks.current.onReady();}// The Pi waits for a newer frame; request it immediately without adding preview latency.
+      timer=setTimeout(()=>void preview(),0);}catch(e){if(active)callbacks.current.onError(e instanceof Error?e.message:'Pi camera unavailable.');}};
     void piRequest(props.address,props.token,'/api/camera/health',controller.signal).then(()=>{if(active)void preview();}).catch(e=>{if(active)callbacks.current.onError(e instanceof Error?e.message:'Pi camera unavailable.');});
     return()=>{active=false;controller.abort();clearTimeout(timer);};
   },[props.address,props.token]);
